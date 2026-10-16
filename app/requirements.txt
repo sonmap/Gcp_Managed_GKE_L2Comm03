@@ -1,0 +1,2 @@
+google-cloud-bigquery>=3.38,<4.0
+google-cloud-compute>=1.39,<2.0
