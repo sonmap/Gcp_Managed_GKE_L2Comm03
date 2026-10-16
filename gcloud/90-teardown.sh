@@ -29,7 +29,5 @@ confirm "Subnet ${SUBNET_NAME} 삭제? (Cluster 삭제 완료 후에만 가능)"
 echo
 echo "서비스 계정과 IAM 바인딩은 자동 삭제하지 않습니다."
 echo "필요 시 아래를 직접 실행하십시오:"
-echo "  gcloud iam service-accounts delete ${SA_RUNTIME} --project=${EDGE_PROJECT}"
-echo "  gcloud iam service-accounts delete ${SA_WORKFLOW} --project=${EDGE_PROJECT}"
-echo "  gcloud iam service-accounts delete ${SA_CLOUDBUILD} --project=${EDGE_PROJECT}"
+echo "  gcloud iam service-accounts delete ${SA_GKE} --project=${EDGE_PROJECT}"
 echo "  gcloud projects remove-iam-policy-binding ... (부여한 role 역순)"

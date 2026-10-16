@@ -11,7 +11,7 @@ export DATA_PROJECT="pjt-c-admin"
 export REGION="asia-northeast3"
 
 # ---- Bootstrap ----
-export ADMIN_USER="admin@sonmap.net"
+export ADMIN_USER="chomap@sonmap.net"
 export VM_SA="620081195575-compute@developer.gserviceaccount.com"
 export TFSTATE_BUCKET="gcp-prod-edp-edge-509423-l2comm-tfstate"   # gcloud 전환 시 선택사항
 
@@ -50,10 +50,11 @@ export SCHEDULE_CRON="0 9 * * *"
 export SCHEDULE_TZ="Asia/Seoul"
 
 # ---- 파생값 ----
-export SA_RUNTIME="sa-l2comm-runtime@${EDGE_PROJECT}.iam.gserviceaccount.com"
-export SA_WORKFLOW="sa-l2comm-workflow@${EDGE_PROJECT}.iam.gserviceaccount.com"
-export SA_CLOUDBUILD="sa-l2comm-cloudbuild@${EDGE_PROJECT}.iam.gserviceaccount.com"
-export SA_TFADMIN="sa-l2comm-tf-admin@${EDGE_PROJECT}.iam.gserviceaccount.com"
+# 통합 서비스 계정.
+# L2Comm02 의 sa-l2comm-runtime / sa-l2comm-workflow / sa-l2comm-cloudbuild 를
+# 하나로 합친 것입니다. Build / Workflow / Runtime 전 구간에서 사용합니다.
+export SA_GKE_NAME="sa-l2comm-gke"
+export SA_GKE="${SA_GKE_NAME}@${EDGE_PROJECT}.iam.gserviceaccount.com"
 export IMAGE_URI="${REGION}-docker.pkg.dev/${EDGE_PROJECT}/${AR_PYTHON}/${IMAGE_NAME}:${IMAGE_TAG}"
 
 EDGE_PROJECT_NUMBER="$(gcloud projects describe "${EDGE_PROJECT}" --format='value(projectNumber)')"

@@ -16,7 +16,7 @@ MEM_GB="4"
 SHELL_COMMAND=""
 NAMESPACE="l2comm-batch"
 KSA_NAME="ksa-l2comm-batch"
-RUNTIME_GSA="sa-l2comm-runtime@gcp-prod-edp-edge-509423.iam.gserviceaccount.com"
+RUNTIME_GSA="sa-l2comm-gke@gcp-prod-edp-edge-509423.iam.gserviceaccount.com"
 
 # By default the current VM is used as the PoC NFS server.
 NFS_SERVER="${NFS_SERVER:-$(hostname -I 2>/dev/null | awk '{print $1}')}"

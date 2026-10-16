@@ -10,6 +10,8 @@ Terraform + Infrastructure Manager 에서 **gcloud 스크립트**로 바뀌었�
 | 30 단계 | Infrastructure Manager Deployment | gcloud 직접 실행 |
 | 상태 관리 | GCS tfstate | 없음 (`99-verify.sh` 점검) |
 | 삭제 | `terraform destroy` | `90-teardown.sh` |
+| 배포 주체 | `admin@sonmap.net` → `sa-l2comm-tf-admin` 가장 | `chomap@sonmap.net` 직접 실행 |
+| 런타임 SA | cloudbuild / workflow / runtime 3개 | `sa-l2comm-gke` 1개로 통합 |
 
 ---
 
@@ -49,6 +51,8 @@ Cloud Scheduler
 | Artifact Registry | `ar-l2comm-python` | Python batch image |
 | Workflow | `wf-l2comm-gke-job` | Kubernetes Job 생성/대기 |
 | Scheduler | `sch-l2comm-gke-job` | Workflow 정기 호출 |
+| 통합 SA | `sa-l2comm-gke` | Build / Workflow / Scheduler / Runtime 전 구간 |
+| 배포 주체 | `chomap@sonmap.net` | gcloud 스크립트 실행 |
 
 ---
 

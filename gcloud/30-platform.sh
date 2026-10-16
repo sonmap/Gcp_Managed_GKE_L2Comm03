@@ -21,27 +21,25 @@ for REPO_PAIR in "${AR_PYTHON}:L2Comm Python batch images" "${AR_HELM}:L2Comm of
 done
 
 ###############################################################################
-# 2) 서비스 계정  (google_service_account)
+# 2) 통합 서비스 계정  (google_service_account)
+#
+#    L2Comm02 의 sa-l2comm-runtime / sa-l2comm-workflow / sa-l2comm-cloudbuild
+#    3개를 sa-l2comm-gke 하나로 통합했습니다.
 ###############################################################################
-ok_if_exists gcloud iam service-accounts create sa-l2comm-runtime \
-  --project="${EDGE_PROJECT}" --display-name="L2Comm GKE Python runtime"
-ok_if_exists gcloud iam service-accounts create sa-l2comm-workflow \
-  --project="${EDGE_PROJECT}" --display-name="L2Comm Workflow GKE Job launcher"
-ok_if_exists gcloud iam service-accounts create sa-l2comm-cloudbuild \
-  --project="${EDGE_PROJECT}" --display-name="L2Comm Cloud Build"
+ok_if_exists gcloud iam service-accounts create "${SA_GKE_NAME}" \
+  --project="${EDGE_PROJECT}" \
+  --display-name="L2Comm GKE 통합 SA (Build / Workflow / Runtime)"
 
 ###############################################################################
 # 3) IAM  (google_project_iam_member / google_bigquery_dataset_iam_member)
+#
+#    통합 SA 는 기존 3개 SA Role 의 합집합을 갖습니다.
 ###############################################################################
-bind_project "${EDGE_PROJECT}" "serviceAccount:${SA_RUNTIME}" \
+bind_project "${EDGE_PROJECT}" "serviceAccount:${SA_GKE}" \
   roles/bigquery.jobUser \
-  roles/compute.viewer
-
-bind_project "${EDGE_PROJECT}" "serviceAccount:${SA_WORKFLOW}" \
+  roles/compute.viewer \
   roles/container.developer \
-  roles/workflows.invoker
-
-bind_project "${EDGE_PROJECT}" "serviceAccount:${SA_CLOUDBUILD}" \
+  roles/workflows.invoker \
   roles/artifactregistry.writer \
   roles/logging.logWriter \
   roles/storage.objectViewer
@@ -49,11 +47,14 @@ bind_project "${EDGE_PROJECT}" "serviceAccount:${SA_CLOUDBUILD}" \
 bind_project "${EDGE_PROJECT}" "serviceAccount:${AUTOPILOT_NODE_SA}" \
   roles/container.defaultNodeServiceAccount
 
+# 배포 주체가 통합 SA 를 지정해 Workflow/Trigger 를 만들려면 actAs 권한이 필요합니다.
+bind_sa "${SA_GKE}" "user:${ADMIN_USER}" roles/iam.serviceAccountUser
+
 # BigQuery Dataset IAM - gcloud 에는 dataset 레벨 명령이 없으므로 bq CLI 사용
 log "BigQuery dataset IAM: ${DATA_PROJECT}:${TARGET_DATASET}"
 bq --project_id="${DATA_PROJECT}" add-iam-policy-binding \
   --dataset=true \
-  --member="serviceAccount:${SA_RUNTIME}" \
+  --member="serviceAccount:${SA_GKE}" \
   --role="roles/bigquery.dataEditor" \
   "${DATA_PROJECT}:${TARGET_DATASET}"
 
@@ -82,7 +83,7 @@ else
     --repository="projects/${EDGE_PROJECT}/locations/${REGION}/connections/${CB_CONNECTION}/repositories/${CB_REPO}" \
     --branch-pattern='^main$' \
     --build-config="cloudbuild/cloudbuild.yaml" \
-    --service-account="projects/${EDGE_PROJECT}/serviceAccounts/${SA_CLOUDBUILD}" \
+    --service-account="projects/${EDGE_PROJECT}/serviceAccounts/${SA_GKE}" \
     --included-files="app/**,cloudbuild/**,gcloud/**"
 fi
 
@@ -113,7 +114,7 @@ fi
 ###############################################################################
 # 6) Workload Identity 바인딩  (google_service_account_iam_member)
 ###############################################################################
-bind_sa "${SA_RUNTIME}" \
+bind_sa "${SA_GKE}" \
   "serviceAccount:${EDGE_PROJECT}.svc.id.goog[${NAMESPACE}/${KSA_NAME}]" \
   roles/iam.workloadIdentityUser
 
@@ -128,7 +129,7 @@ sed \
   -e "s|@@CLUSTER_NAME@@|${CLUSTER_NAME}|g" \
   -e "s|@@NAMESPACE@@|${NAMESPACE}|g" \
   -e "s|@@KSA_NAME@@|${KSA_NAME}|g" \
-  -e "s|@@SA_RUNTIME@@|${SA_RUNTIME}|g" \
+  -e "s|@@SA_GKE@@|${SA_GKE}|g" \
   -e "s|@@IMAGE_URI@@|${IMAGE_URI}|g" \
   -e "s|@@DATA_PROJECT@@|${DATA_PROJECT}|g" \
   -e "s|@@TARGET_DATASET@@|${TARGET_DATASET}|g" \
@@ -141,7 +142,7 @@ gcloud workflows deploy "${WORKFLOW_NAME}" \
   --project="${EDGE_PROJECT}" \
   --location="${REGION}" \
   --source="${RENDERED}" \
-  --service-account="${SA_WORKFLOW}" \
+  --service-account="${SA_GKE}" \
   --description="Create and wait for the L2Comm Kubernetes Job on GKE Autopilot"
 
 ###############################################################################
@@ -155,8 +156,7 @@ artifact_image           : ${IMAGE_URI}
 helm_oci_repository      : oci://${REGION}-docker.pkg.dev/${EDGE_PROJECT}/${AR_HELM}
 cloudbuild_trigger_name  : ${CB_TRIGGER}
 namespace                : ${NAMESPACE}
-runtime_service_account  : ${SA_RUNTIME}
-workflow_service_account : ${SA_WORKFLOW}
+service_account          : ${SA_GKE}   (Build / Workflow / Runtime 통합)
 workflow_name            : ${WORKFLOW_NAME}
 EOF
 

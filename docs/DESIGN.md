@@ -87,15 +87,32 @@ On-Prem
 
 | Principal | Scope | Role / 목적 |
 |---|---|---|
-| `admin@sonmap.net` | Org/Projects | 00/10 관리자 수행 |
-| `sa-l2comm-tf-admin` | Edge/Host/Data | 위임 배포 관리자 (gcloud 스크립트 실행 주체) |
+| `chomap@sonmap.net` | Org/Projects | 배포 주체. gcloud 스크립트를 직접 실행 |
+| ~~`sa-l2comm-tf-admin`~~ | — | **L2Comm03에서 삭제.** Terraform 위임 실행이 없어져 불필요. 동일 Role 집합은 `chomap@sonmap.net` 에 직접 부여 |
 | ~~`sa-l2comm-inframgr`~~ | Edge | **L2Comm03에서 미사용.** Infrastructure Manager 제거로 불필요 (`CREATE_INFRAMGR=true` 시에만 생성) |
-| `sa-l2comm-cloudbuild` | Edge | AR Writer, Logging Writer, Storage Viewer |
-| `sa-l2comm-workflow` | Edge | Container Developer, Workflows Invoker |
-| `sa-l2comm-runtime` | Edge/Data | BigQuery Job User, Compute Viewer, Dataset Data Editor |
-| `ksa-l2comm-batch` | GKE Namespace | Workload Identity -> runtime GSA |
+| **`sa-l2comm-gke`** | Edge/Data | **통합 SA.** 기존 `sa-l2comm-cloudbuild` + `sa-l2comm-workflow` + `sa-l2comm-runtime` 을 하나로 합침 |
+| `ksa-l2comm-batch` | GKE Namespace | Workload Identity -> `sa-l2comm-gke` |
 | `541022739403-compute@developer.gserviceaccount.com` | Edge / AR | defaultNodeServiceAccount + AR Reader |
 | Cloud Build P4SA | Edge | Secret Manager Admin for GitHub 2nd-gen connection |
+
+### `sa-l2comm-gke` Role 구성
+
+기존 3개 SA Role 의 합집합입니다.
+
+| Role | 출처 | 용도 |
+|---|---|---|
+| `roles/artifactregistry.writer` | cloudbuild | Image Push |
+| `roles/logging.logWriter` | cloudbuild | Build 로그 |
+| `roles/storage.objectViewer` | cloudbuild | Build 소스 읽기 |
+| `roles/container.developer` | workflow | GKE Job 생성 |
+| `roles/workflows.invoker` | workflow | Workflow 실행 |
+| `roles/bigquery.jobUser` | runtime | BigQuery Job 실행 |
+| `roles/compute.viewer` | runtime | Region inventory 조회 |
+| `roles/bigquery.dataEditor` (Dataset) | runtime | `pjt-c-admin:dlk_sample` 적재 |
+
+> **트레이드오프**: Build 주체와 Runtime 주체가 같은 SA 를 쓰게 되므로
+> 최소권한 분리는 약해집니다. 운영 전환 시 권한 분리가 요구되면
+> `00-env.sh` 의 `SA_GKE` 를 용도별로 되돌리는 것으로 복원할 수 있습니다.
 
 ## CI/CD vs Runtime Separation
 

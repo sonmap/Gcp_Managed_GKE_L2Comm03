@@ -13,7 +13,7 @@ steps:
 images:
   - ${_IMAGE_URI}
 
-serviceAccount: projects/gcp-prod-edp-edge-509423/serviceAccounts/sa-l2comm-cloudbuild@gcp-prod-edp-edge-509423.iam.gserviceaccount.com
+serviceAccount: projects/gcp-prod-edp-edge-509423/serviceAccounts/sa-l2comm-gke@gcp-prod-edp-edge-509423.iam.gserviceaccount.com
 
 options:
   logging: CLOUD_LOGGING_ONLY

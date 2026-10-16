@@ -33,8 +33,9 @@ gcloud services enable cloudscheduler.googleapis.com secretmanager.googleapis.co
 ###############################################################################
 bind_project "${EDGE_PROJECT}" "serviceAccount:${CLOUDBUILD_P4SA}" roles/secretmanager.admin
 
-# terraform 의 inframgr_cloudbuild_editor -> gcloud 전환 시 실제 실행 주체로 대체
-bind_project "${EDGE_PROJECT}" "serviceAccount:${SA_TFADMIN}" roles/cloudbuild.builds.editor
+# terraform 의 inframgr_cloudbuild_editor -> 실제 실행 주체(ADMIN_USER)로 대체.
+# 00-bootstrap.sh 에서 이미 부여되므로 중복이지만, 10 단계만 단독 실행하는 경우를 위해 유지합니다.
+bind_project "${EDGE_PROJECT}" "user:${ADMIN_USER}" roles/cloudbuild.builds.editor
 
 ###############################################################################
 # 3) Shared VPC 서비스 프로젝트 연결

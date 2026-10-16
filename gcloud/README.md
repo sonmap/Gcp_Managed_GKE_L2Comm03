@@ -43,6 +43,36 @@ vi gcloud/00-env.sh          # 프로젝트 ID / CIDR / SA 값 확인
 |---|---|---|
 | `CREATE_INFRAMGR` | `false` | Infrastructure Manager를 병행 운영할 때만 `true`. `sa-l2comm-inframgr` 및 `config.*` 권한 생성 |
 | `CREATE_TFSTATE_BUCKET` | `false` | Terraform과 병행할 때만 `true`. gcloud 전용 운영에서는 불필요 |
+| `GRANT_VM_DEPLOYER` | `false` | 관리 VM의 기본 SA로 스크립트를 실행할 때 `true`. 배포용 Role을 VM SA에도 부여 |
+
+---
+
+## 2-1. 서비스 계정 구성 (L2Comm02 대비 단순화)
+
+```text
+L2Comm02                          L2Comm03
+─────────────────────────         ─────────────────────────
+sa-l2comm-tf-admin        ──┐
+                            └──>  chomap@sonmap.net (직접 실행)
+
+sa-l2comm-cloudbuild      ──┐
+sa-l2comm-workflow        ──┼──>  sa-l2comm-gke
+sa-l2comm-runtime         ──┘
+```
+
+| 주체 | 생성 위치 | 용도 |
+|---|---|---|
+| `chomap@sonmap.net` | — (기존 계정) | 배포 주체. `00-bootstrap.sh` 가 Edge/Host/Data Role 부여 |
+| `sa-l2comm-gke` | `30-platform.sh` | Cloud Build / Workflows / Cloud Scheduler / GKE Runtime 전 구간 |
+
+`sa-l2comm-gke` 는 기존 3개 SA Role 의 합집합(`artifactregistry.writer`,
+`logging.logWriter`, `storage.objectViewer`, `container.developer`,
+`workflows.invoker`, `bigquery.jobUser`, `compute.viewer`, Dataset `bigquery.dataEditor`)
+을 갖습니다. 배포 주체에는 이 SA 에 대한 `roles/iam.serviceAccountUser`(actAs)가
+필요하며 `30-platform.sh` 가 자동 부여합니다.
+
+> Build 주체와 Runtime 주체가 동일 SA 가 되므로 최소권한 분리는 약해집니다.
+> 운영 전환 시 분리가 필요하면 `00-env.sh` 의 `SA_GKE` 를 용도별로 되돌립니다.
 
 ---
 
@@ -153,6 +183,8 @@ Edge 프로젝트 권한만으로는 실패합니다.
 
 gcloud 전환으로 아래가 불필요해졌습니다.
 
+- `sa-l2comm-tf-admin` 서비스 계정 (배포 주체가 `chomap@sonmap.net` 직접 실행으로 변경)
+- `sa-l2comm-cloudbuild` / `sa-l2comm-workflow` / `sa-l2comm-runtime` (→ `sa-l2comm-gke` 통합)
 - `sa-l2comm-inframgr` 서비스 계정
 - `roles/config.agent`, `roles/config.admin`
 - `config.googleapis.com` API

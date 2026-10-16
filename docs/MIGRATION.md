@@ -14,8 +14,57 @@
 | 멱등성 | state 기반 | `describe \|\| create` + `ok_if_exists()` |
 | 불필요해진 자원 | — | `sa-l2comm-inframgr`, `roles/config.agent`, `roles/config.admin`, `config.googleapis.com`, tfstate 버킷 |
 | Build Trigger 감시 경로 | `terraform/30-infra-manager/**` | `gcloud/**` |
+| 배포 주체 | `admin@sonmap.net` → `sa-l2comm-tf-admin` 가장 | `chomap@sonmap.net` 직접 실행 |
+| 런타임 SA | `sa-l2comm-cloudbuild` / `sa-l2comm-workflow` / `sa-l2comm-runtime` | `sa-l2comm-gke` 1개로 통합 |
 
-Network / IAM / Runtime 설계값은 L2Comm02와 **완전히 동일**합니다.
+Network 설계값(CIDR / Subnet / Control Plane)은 L2Comm02와 **완전히 동일**하며,
+IAM 주체 구성만 아래와 같이 단순화했습니다.
+
+## 1-1. 서비스 계정 단순화
+
+```text
+L2Comm02                          L2Comm03
+─────────────────────────         ─────────────────────────
+sa-l2comm-tf-admin        ──┐
+                            └──>  chomap@sonmap.net (직접 실행, 동일 Role 집합)
+
+sa-l2comm-cloudbuild      ──┐
+sa-l2comm-workflow        ──┼──>  sa-l2comm-gke (Role 합집합)
+sa-l2comm-runtime         ──┘
+```
+
+영향 범위:
+
+| 대상 | 변경 |
+|---|---|
+| `cloudbuild/cloudbuild.yaml` | `serviceAccount:` → `sa-l2comm-gke` |
+| Cloud Build Trigger | `--service-account` → `sa-l2comm-gke` |
+| Workflows | `--service-account` → `sa-l2comm-gke` |
+| Cloud Scheduler | `--oauth-service-account-email` → `sa-l2comm-gke` |
+| Workload Identity | `ksa-l2comm-batch` → `sa-l2comm-gke` |
+| `helm/l2comm-batch/values.yaml` | `gcpServiceAccount` → `sa-l2comm-gke` |
+| `ssw/dlk/client_gke` | `RUNTIME_GSA` → `sa-l2comm-gke` |
+
+> 통합으로 Build 주체와 Runtime 주체의 권한 분리가 약해집니다.
+> 운영 전환 시 분리가 필요하면 `00-env.sh` 에서 용도별 SA 로 되돌릴 수 있습니다.
+
+### 기존 환경에서 이관하는 경우
+
+L2Comm02 자원이 이미 떠 있다면 통합 SA 생성 후 기존 3개 SA 를 정리합니다.
+
+```bash
+./gcloud/30-platform.sh   # sa-l2comm-gke 생성 + 참조 갱신 (Workflow/Trigger 재배포)
+
+# 신규 Job/Build 가 정상 동작하는 것을 확인한 뒤 삭제
+for S in sa-l2comm-runtime sa-l2comm-workflow sa-l2comm-cloudbuild sa-l2comm-tf-admin; do
+  gcloud iam service-accounts delete \
+    "${S}@gcp-prod-edp-edge-509423.iam.gserviceaccount.com" \
+    --project=gcp-prod-edp-edge-509423
+done
+```
+
+> SA 삭제 전에 `remove-iam-policy-binding` 으로 부여된 Role 을 먼저 회수하십시오.
+> 삭제된 SA 의 바인딩은 `deleted:serviceAccount:...` 형태로 정책에 잔류합니다.
 
 ## 2. L2Comm 대비 변경점 (Network 설계, L2Comm02에서 계승)
 

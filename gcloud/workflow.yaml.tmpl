@@ -48,7 +48,7 @@ main:
               metadata:
                 name: "@@KSA_NAME@@"
                 annotations:
-                  iam.gke.io/gcp-service-account: "@@SA_RUNTIME@@"
+                  iam.gke.io/gcp-service-account: "@@SA_GKE@@"
         except:
           as: e
           steps:

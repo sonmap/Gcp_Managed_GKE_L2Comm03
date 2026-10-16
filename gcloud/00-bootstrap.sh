@@ -62,12 +62,11 @@ fi
 
 ###############################################################################
 # 3) 서비스 계정  (google_service_account)
+#
+#    sa-l2comm-tf-admin 은 L2Comm03 에서 삭제되었습니다.
+#    Terraform 위임 실행이 없어졌으므로 배포는 ADMIN_USER 가 직접 수행합니다.
+#    런타임용 통합 SA(sa-l2comm-gke)는 30-platform.sh 에서 생성합니다.
 ###############################################################################
-log "sa-l2comm-tf-admin 생성"
-ok_if_exists gcloud iam service-accounts create sa-l2comm-tf-admin \
-  --project="${EDGE_PROJECT}" \
-  --display-name="L2Comm delegated administrator"
-
 if [[ "${CREATE_INFRAMGR}" == "true" ]]; then
   ok_if_exists gcloud iam service-accounts create sa-l2comm-inframgr \
     --project="${EDGE_PROJECT}" \
@@ -75,11 +74,15 @@ if [[ "${CREATE_INFRAMGR}" == "true" ]]; then
 fi
 
 ###############################################################################
-# 4) 배포 SA 권한  (google_project_iam_member)
+# 4) 배포 주체 권한  (google_project_iam_member)
+#
+#    L2Comm02 에서는 sa-l2comm-tf-admin 에 부여하고 ADMIN_USER 가 이를 가장했으나,
+#    L2Comm03 은 해당 SA 를 삭제했으므로 동일한 Role 집합을 ADMIN_USER 에게
+#    직접 부여합니다. (Role 구성 자체는 L2Comm02 와 동일)
 ###############################################################################
-TF_ADMIN_MEMBER="serviceAccount:${SA_TFADMIN}"
+DEPLOYER_MEMBER="user:${ADMIN_USER}"
 
-bind_project "${EDGE_PROJECT}" "${TF_ADMIN_MEMBER}" \
+bind_project "${EDGE_PROJECT}" "${DEPLOYER_MEMBER}" \
   roles/artifactregistry.admin \
   roles/cloudbuild.builds.editor \
   roles/compute.viewer \
@@ -89,30 +92,39 @@ bind_project "${EDGE_PROJECT}" "${TF_ADMIN_MEMBER}" \
   roles/resourcemanager.projectIamAdmin \
   roles/serviceusage.serviceUsageAdmin
 
-bind_project "${HOST_PROJECT}" "${TF_ADMIN_MEMBER}" \
+bind_project "${HOST_PROJECT}" "${DEPLOYER_MEMBER}" \
   roles/compute.networkAdmin \
   roles/compute.securityAdmin \
   roles/resourcemanager.projectIamAdmin \
   roles/serviceusage.serviceUsageAdmin
 
-bind_project "${DATA_PROJECT}" "${TF_ADMIN_MEMBER}" \
+bind_project "${DATA_PROJECT}" "${DEPLOYER_MEMBER}" \
   roles/bigquery.admin
+
+# VM 에서 스크립트를 실행하는 경우 VM 기본 SA 에도 동일 Role 이 필요합니다.
+if [[ "${GRANT_VM_DEPLOYER:-false}" == "true" ]]; then
+  bind_project "${EDGE_PROJECT}" "serviceAccount:${VM_SA}" \
+    roles/artifactregistry.admin \
+    roles/cloudbuild.builds.editor \
+    roles/compute.viewer \
+    roles/container.admin \
+    roles/iam.serviceAccountAdmin \
+    roles/iam.serviceAccountUser \
+    roles/resourcemanager.projectIamAdmin \
+    roles/serviceusage.serviceUsageAdmin
+  bind_project "${HOST_PROJECT}" "serviceAccount:${VM_SA}" \
+    roles/compute.networkAdmin \
+    roles/compute.securityAdmin
+  bind_project "${DATA_PROJECT}" "serviceAccount:${VM_SA}" roles/bigquery.admin
+fi
 
 if [[ "${CREATE_TFSTATE_BUCKET}" == "true" ]]; then
   gcloud storage buckets add-iam-policy-binding "gs://${TFSTATE_BUCKET}" \
-    --member="${TF_ADMIN_MEMBER}" --role=roles/storage.objectAdmin --quiet >/dev/null
-  gcloud storage buckets add-iam-policy-binding "gs://${TFSTATE_BUCKET}" \
-    --member="user:${ADMIN_USER}" --role=roles/storage.objectAdmin --quiet >/dev/null
+    --member="${DEPLOYER_MEMBER}" --role=roles/storage.objectAdmin --quiet >/dev/null
 fi
 
 ###############################################################################
-# 5) 가장(impersonation) 권한  (google_service_account_iam_member)
-###############################################################################
-bind_sa "${SA_TFADMIN}" "serviceAccount:${VM_SA}"   roles/iam.serviceAccountTokenCreator
-bind_sa "${SA_TFADMIN}" "user:${ADMIN_USER}"        roles/iam.serviceAccountTokenCreator
-
-###############################################################################
-# 6) Infra Manager SA (선택)
+# 5) Infra Manager SA (선택)
 ###############################################################################
 if [[ "${CREATE_INFRAMGR}" == "true" ]]; then
   INFRAMGR_MEMBER="serviceAccount:sa-l2comm-inframgr@${EDGE_PROJECT}.iam.gserviceaccount.com"

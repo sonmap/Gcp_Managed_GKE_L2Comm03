@@ -12,7 +12,7 @@ COMMON_ARGS=(
   --time-zone="${SCHEDULE_TZ}"
   --uri="${URI}"
   --http-method=POST
-  --oauth-service-account-email="${SA_WORKFLOW}"
+  --oauth-service-account-email="${SA_GKE}"
   --oauth-token-scope="https://www.googleapis.com/auth/cloud-platform"
   --headers="Content-Type=application/json"
   --message-body='{"argument":"{}"}'
