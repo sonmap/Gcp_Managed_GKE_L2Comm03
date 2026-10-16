@@ -973,6 +973,7 @@ crontab -l
 | 저장소 추가 시 `NOT_FOUND` / `PERMISSION_DENIED` | GitHub App 이 L2Comm03 에 접근 불가 | §7-2 에서 GitHub App Repository access 에 L2Comm03 추가 |
 | `BigQuery error ... This feature requires allowlisting` | `bq add-iam-policy-binding --dataset` 미지원 조직 | 자동으로 dataset ACL 방식으로 폴백됨. 8-4 로 `WRITER` 부여 확인 |
 | 빌드 로그에 `REPO_FULL_NAME: ...L2Comm02` | L2Comm02 트리거를 재사용함 | `trg-l2comm03-python-image` 를 사용. 최신 소스로 `git pull` 후 `30-platform.sh` 재실행 |
+| `triggers create github: unrecognized arguments: <트리거명>` | 트리거 이름을 위치 인자로 전달 | 최신 소스로 `git pull`. `--name=` 플래그를 사용하도록 수정됨 |
 | `create-auto: unrecognized arguments: --workload-pool` | Autopilot 은 해당 플래그 미지원 | 최신 소스로 `git pull`. Autopilot 은 WI 가 기본 활성화이며 pool 은 자동 설정됨 |
 | `enable_master_authorized_networks should be enabled if private endpoint is enabled` | 플래그 조합 누락 | 최신 소스로 `git pull`. `--enable-master-authorized-networks` 가 함께 지정됨 |
 | 생성 중 Cloud NAT 안내 메시지 | Private nodes 안내(오류 아님) | AR 은 Private Google Access 로 접근하므로 무시 가능. 공인 인터넷 egress 가 필요하면 Cloud NAT 구성 |

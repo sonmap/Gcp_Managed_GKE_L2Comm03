@@ -173,17 +173,22 @@ if gcloud builds triggers describe "${CB_TRIGGER}" \
     echo "       기대: ${WANT_REPO}" >&2
     echo "       실제: ${CUR_REPO:-<없음>}" >&2
     echo "" >&2
-    echo "  조치 1) 이 트리거를 03 저장소로 변경" >&2
-    echo "    gcloud builds triggers update github ${CB_TRIGGER} \\" >&2
-    echo "      --project=${EDGE_PROJECT} --region=${REGION} \\" >&2
-    echo "      --repository=${WANT_REPO} \\" >&2
-    echo "      --branch-pattern='^main\$'" >&2
+    echo "  'gcloud builds triggers update github' 에는 --repository 플래그가" >&2
+    echo "  없으므로 연결 저장소는 변경할 수 없습니다. 아래 중 하나를 선택하십시오." >&2
+    echo "" >&2
+    echo "  조치 1) 기존 트리거를 삭제하고 다시 생성 (해당 트리거가 03 전용일 때)" >&2
+    echo "    gcloud builds triggers delete ${CB_TRIGGER} \\" >&2
+    echo "      --project=${EDGE_PROJECT} --region=${REGION}" >&2
+    echo "    ./gcloud/30-platform.sh" >&2
     echo "" >&2
     echo "  조치 2) 00-env.sh 의 CB_TRIGGER 를 다른 이름으로 바꾸고 재실행" >&2
+    echo "    (기존 트리거를 계속 써야 하는 경우. 두 트리거는 공존 가능)" >&2
     exit 1
   fi
 else
-  gcloud builds triggers create github "${CB_TRIGGER}" \
+  # 트리거 이름은 위치 인자가 아니라 --name 플래그로 전달합니다.
+  gcloud builds triggers create github \
+    --name="${CB_TRIGGER}" \
     --project="${EDGE_PROJECT}" \
     --region="${REGION}" \
     --description="Auto-build L2Comm Python image on source updates" \
