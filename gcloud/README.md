@@ -62,6 +62,7 @@ sa-l2comm-runtime         ──┘
 
 | 주체 | 생성 위치 | 용도 |
 |---|---|---|
+| `admin@sonmap.net` | — (Owner 계정) | **권한 부여 전용.** `00-bootstrap.sh` 만 이 계정으로 실행 |
 | `cho@sonmap.net` | — (기존 계정) | 배포 주체. `00-bootstrap.sh` 가 Edge/Host/Data Role 부여 |
 | `sa-l2comm-gke` | `30-platform.sh` | Cloud Build / GKE Runtime (Pod Workload Identity) |
 

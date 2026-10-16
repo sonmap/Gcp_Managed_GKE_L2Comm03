@@ -89,7 +89,8 @@ On-Prem
 
 | Principal | Scope | Role / 목적 |
 |---|---|---|
-| `cho@sonmap.net` | Org/Projects | 배포 주체. gcloud 스크립트를 직접 실행 |
+| `admin@sonmap.net` | Org/Projects (Owner) | **권한 부여 전용.** `00-bootstrap.sh` 실행 시에만 사용하며 자원 생성에는 쓰지 않음 |
+| `cho@sonmap.net` | Edge/Host/Data | 배포 주체. 10 단계 이후 모든 gcloud 스크립트를 직접 실행 |
 | ~~`sa-l2comm-tf-admin`~~ | — | **L2Comm03에서 삭제.** Terraform 위임 실행이 없어져 불필요. 동일 Role 집합은 `cho@sonmap.net` 에 직접 부여 |
 | ~~`sa-l2comm-inframgr`~~ | Edge | **L2Comm03에서 미사용.** Infrastructure Manager 제거로 불필요 (`CREATE_INFRAMGR=true` 시에만 생성) |
 | **`sa-l2comm-gke`** | Edge/Data | **통합 SA.** 기존 `sa-l2comm-cloudbuild` + `sa-l2comm-workflow` + `sa-l2comm-runtime` 을 하나로 합침 |

@@ -1,11 +1,25 @@
 #!/usr/bin/env bash
 # terraform/00-bootstrap/main.tf 의 gcloud 등가 구현
 #
+# ** 이 스크립트만 Owner 계정(admin@sonmap.net)으로 실행합니다. **
+#
+# 여기서 하는 일은 API 활성화와 IAM 부여뿐이며, Owner 권한이 필요한 작업은
+# 이 단계가 전부입니다. 실제 자원 생성(10 단계 이후)은 여기서 Role 을 받은
+# 배포 주체(cho@sonmap.net)로 수행합니다.
+#
+#   gcloud auth login admin@sonmap.net
+#   gcloud config set account admin@sonmap.net
+#   ./gcloud/00-bootstrap.sh
+#   gcloud config set account cho@sonmap.net     # 이후 단계
+#
 # 주의: gcloud 전환 시 Infrastructure Manager(config.googleapis.com) 는
 #       사용하지 않으므로 sa-l2comm-inframgr 관련 블록은 선택사항입니다.
 #       필요 없으면 CREATE_INFRAMGR=false 로 두세요.
 
 source "$(dirname "$0")/00-env.sh"
+
+# 권한 부여 단계 -> Owner 로 실행
+require_account "${OWNER_USER}"
 
 CREATE_INFRAMGR="${CREATE_INFRAMGR:-false}"   # Infra Manager 병행 운영 시에만 true
 CREATE_TFSTATE_BUCKET="${CREATE_TFSTATE_BUCKET:-false}"  # gcloud 전용이면 불필요
@@ -150,3 +164,18 @@ if [[ "${CREATE_INFRAMGR}" == "true" ]]; then
 fi
 
 log "00-bootstrap 완료"
+
+cat <<EOF
+
+=== 다음 단계 ===
+Owner 계정의 역할은 여기까지입니다. 배포 주체로 전환한 뒤 진행하십시오.
+
+  gcloud config set account ${ADMIN_USER}
+  ./gcloud/10-network.sh
+
+부여된 Role 확인:
+  gcloud projects get-iam-policy ${EDGE_PROJECT} \\
+    --flatten="bindings[].members" \\
+    --filter="bindings.members:${ADMIN_USER}" \\
+    --format="value(bindings.role)"
+EOF

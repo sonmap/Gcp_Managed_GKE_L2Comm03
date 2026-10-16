@@ -10,7 +10,7 @@ Terraform + Infrastructure Manager 에서 **gcloud 스크립트**로 바뀌었�
 | 30 단계 | Infrastructure Manager Deployment | gcloud 직접 실행 |
 | 상태 관리 | GCS tfstate | 없음 (`99-verify.sh` 점검) |
 | 삭제 | `terraform destroy` | `90-teardown.sh` |
-| 배포 주체 | `admin@sonmap.net` → `sa-l2comm-tf-admin` 가장 | `cho@sonmap.net` 직접 실행 |
+| 배포 주체 | `admin@sonmap.net` → `sa-l2comm-tf-admin` 가장 | `cho@sonmap.net` 직접 실행 (Owner는 권한 부여만) |
 | 런타임 SA | cloudbuild / workflow / runtime 3개 | `sa-l2comm-gke` 1개로 통합 |
 
 ---
@@ -82,7 +82,8 @@ DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-p
 | Artifact Registry | `gcp-prod-edp-hub-vpchost` / `ar-l2comm-python` | Python batch image (Host 프로젝트) |
 | Batch 실행 | `ssw/dlk/run-gke.sh` + `client_gke` | Kubernetes Job 생성/대기 (Workflows 미사용) |
 | 통합 SA | `sa-l2comm-gke` | Build / Runtime 전 구간 |
-| 배포 주체 | `cho@sonmap.net` | gcloud 스크립트 실행 |
+| Owner | `admin@sonmap.net` | **권한 부여 전용** (`00-bootstrap.sh`에서만 사용) |
+| 배포 주체 | `cho@sonmap.net` | 10 단계 이후 모든 자원 생성/운영 |
 
 ---
 
@@ -116,13 +117,32 @@ chmod +x gcloud/*.sh
 
 # 프로젝트/CIDR/SA 값 확인 후 수정
 vi gcloud/00-env.sh
+```
 
-./gcloud/00-bootstrap.sh          # API / SA / IAM
+### 1단계 — Owner 계정 (권한 부여 전용)
+
+```bash
+gcloud auth login admin@sonmap.net
+gcloud config set account admin@sonmap.net
+
+./gcloud/00-bootstrap.sh          # API 활성화 / IAM 부여
+```
+
+### 2단계 — 배포 주체 계정
+
+```bash
+gcloud config set account cho@sonmap.net
+
 ./gcloud/10-network.sh            # Shared VPC / Subnet / Subnet IAM
 ./gcloud/20-source-connection.sh  # Cloud Build GitHub Repository 연결
 ./gcloud/30-platform.sh           # AR / SA / Trigger / GKE Autopilot / Namespace / KSA
 ./gcloud/99-verify.sh             # 전체 상태 점검
 ```
+
+> Owner 권한이 필요한 작업은 `00-bootstrap.sh` 뿐입니다. 나머지 단계는
+> 여기서 Role 을 받은 `cho@sonmap.net` 으로 수행합니다.
+> 각 스크립트는 시작 시 실행 계정을 검증하며, 계정이 다르면 전환 방법을
+> 안내하고 중단합니다. 의도적으로 다른 계정을 쓰려면 `SKIP_ACCOUNT_CHECK=1`.
 
 배치 실행은 프로비저닝이 아니라 VPC 내부 VM에서 수행합니다 (§1 참고).
 

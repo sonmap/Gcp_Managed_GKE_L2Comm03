@@ -5,26 +5,36 @@
 다음 단계로 넘어가지 마십시오.
 
 전제:
-- 실행 계정: `cho@sonmap.net`
+
+| 계정 | 용도 | 사용 단계 |
+|---|---|---|
+| `admin@sonmap.net` | Owner. **권한 부여 전용** | 1단계 (`00-bootstrap.sh`)만 |
+| `cho@sonmap.net` | 배포/운영 주체 | 2단계 이후 전부 |
+
 - 0~4단계는 어디서든 가능, **5~7단계는 VPC 내부 VM에서만** 가능 (Private endpoint)
+- 각 스크립트는 시작 시 실행 계정을 검증하고, 틀리면 전환 방법을 안내하며 중단합니다.
+  우회하려면 `SKIP_ACCOUNT_CHECK=1`.
 
 ---
 
 ## 0. 사전 준비
 
-### 0-1. 인증 및 저장소
+### 0-1. 두 계정 로그인
 
 ```bash
-gcloud auth login cho@sonmap.net
+gcloud auth login admin@sonmap.net    # Owner (권한 부여용)
+gcloud auth login cho@sonmap.net      # 배포 주체
 gcloud auth list
 ```
 
-기대: `cho@sonmap.net` 앞에 `*` 표시.
+기대: 두 계정 모두 목록에 보임. 이후 `gcloud config set account` 로 전환합니다.
 
 ```bash
 gcloud config set project gcp-prod-edp-edge-509423
 gcloud config list
 ```
+
+### 0-1b. 저장소
 
 ```bash
 git clone https://github.com/sonmap/Gcp_Managed_GKE_L2Comm03.git
@@ -45,7 +55,8 @@ source gcloud/00-env.sh
 echo "EDGE      : ${EDGE_PROJECT} (${EDGE_PROJECT_NUMBER})"
 echo "HOST      : ${HOST_PROJECT}"
 echo "DATA      : ${DATA_PROJECT}"
-echo "ADMIN     : ${ADMIN_USER}"
+echo "OWNER     : ${OWNER_USER}   (권한 부여 전용)"
+echo "ADMIN     : ${ADMIN_USER}   (배포 주체)"
 echo "SA_GKE    : ${SA_GKE}"
 echo "IMAGE     : ${IMAGE_URI}"
 echo "VM_SA     : ${VM_SA}"
@@ -58,7 +69,10 @@ echo "NODE_SA   : ${AUTOPILOT_NODE_SA}"
 > 서로 다릅니다. 위에 출력된 `EDGE_PROJECT_NUMBER`와 대조해 둘 중 어느 쪽이
 > 맞는지 확인하십시오.
 
-### 0-3. 권한 확인
+### 0-3. 권한 확인 (1단계 실행 후)
+
+아래는 `00-bootstrap.sh` 가 끝난 뒤 배포 주체가 Role 을 제대로 받았는지
+확인하는 명령입니다. 최초 구축 시에는 1단계 이후에 실행하십시오.
 
 ```bash
 gcloud projects get-iam-policy gcp-prod-edp-edge-509423 \
@@ -74,16 +88,34 @@ gcloud projects get-iam-policy gcp-prod-edp-hub-vpchost \
   --format="value(bindings.role)"
 ```
 
-Host 프로젝트에 `roles/compute.networkAdmin`이 없으면 1단계가 실패합니다.
-Shared VPC 연결에는 조직 수준 `roles/compute.xpnAdmin`도 필요합니다.
+Host 프로젝트에 `roles/compute.networkAdmin` 과 `roles/artifactregistry.admin`
+이 없으면 2단계가 실패합니다.
+Shared VPC 연결에는 조직 수준 `roles/compute.xpnAdmin` 이 추가로 필요하며,
+이는 Owner 계정이 조직 수준에서 부여해야 합니다.
 
 ---
 
-## 1. 00-bootstrap — API / IAM
+## 1. 00-bootstrap — API / IAM  (**Owner 계정**)
+
+이 단계만 Owner 로 실행합니다. 하는 일은 API 활성화와 IAM 부여뿐입니다.
 
 ```bash
+gcloud config set account admin@sonmap.net
+gcloud config get-value account      # admin@sonmap.net 확인
+
 ./gcloud/00-bootstrap.sh
 ```
+
+> 계정이 다르면 스크립트가 전환 방법을 안내하고 중단합니다.
+
+완료 후 배포 주체로 전환합니다.
+
+```bash
+gcloud config set account cho@sonmap.net
+gcloud config get-value account      # cho@sonmap.net 확인
+```
+
+이후 모든 단계는 이 계정으로 수행합니다.
 
 ### 확인
 
@@ -106,7 +138,7 @@ gcloud services list --enabled --project=gcp-prod-edp-edge-509423 \
 
 ---
 
-## 2. 10-network — Shared VPC / Subnet
+## 2. 10-network — Shared VPC / Subnet  (**배포 주체**)
 
 ### 2-1. CIDR 중복 사전 확인
 
@@ -163,7 +195,7 @@ gcloud compute shared-vpc associated-projects list gcp-prod-edp-hub-vpchost \
 
 ---
 
-## 3. 20-source-connection — Cloud Build 저장소 연결
+## 3. 20-source-connection — Cloud Build 저장소 연결  (**배포 주체**)
 
 ```bash
 gcloud builds connections list \
@@ -189,7 +221,7 @@ gcloud builds repositories list \
 
 ---
 
-## 4. 30-platform — AR / SA / Trigger / GKE
+## 4. 30-platform — AR / SA / Trigger / GKE  (**배포 주체**)
 
 ```bash
 ./gcloud/30-platform.sh
@@ -581,6 +613,8 @@ cd ~/Gcp_Managed_GKE_L2Comm03
 | Pod 에서 BigQuery 403 | Workload Identity 미연결 | KSA 어노테이션과 `workloadIdentityUser` 바인딩 확인 (4-5, 6-4) |
 | PVC `Pending` | NFS 서버 미기동 / IP 불일치 | VM 에서 `showmount -e localhost`, `--nfs-server` 로 IP 명시 |
 | Job 생성 403 | 실행 주체 권한 | `container.developer` 가 실행 계정/VM SA 에 있는지 확인 (4-3) |
+| 스크립트가 계정 오류로 중단 | 계정 분리 규칙 | `00-bootstrap.sh` 는 `admin@sonmap.net`, 나머지는 `cho@sonmap.net`. `gcloud config set account <계정>` 으로 전환 |
+| 2단계 이후 권한 부족 | 1단계 미실행 또는 다른 계정으로 실행 | Owner 로 `00-bootstrap.sh` 재실행 후 0-3 으로 Role 확인 |
 
 ### 디버깅 명령
 

@@ -4,6 +4,9 @@
 
 source "$(dirname "$0")/00-env.sh"
 
+# 자원 생성/운영 단계 -> 배포 주체로 실행 (Owner 아님)
+require_account "${ADMIN_USER}"
+
 confirm() { read -r -p "$1 [y/N] " a; [[ "${a}" == "y" || "${a}" == "Y" ]]; }
 
 confirm "GKE Cluster ${CLUSTER_NAME} 삭제? (수십 분 소요)" && \

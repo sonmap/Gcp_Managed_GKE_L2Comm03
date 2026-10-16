@@ -5,6 +5,9 @@
 # 선행: 00-bootstrap.sh, 10-network.sh, 20-source-connection.sh
 
 source "$(dirname "$0")/00-env.sh"
+
+# 자원 생성/운영 단계 -> 배포 주체로 실행 (Owner 아님)
+require_account "${ADMIN_USER}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 ###############################################################################

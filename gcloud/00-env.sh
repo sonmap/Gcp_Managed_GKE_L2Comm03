@@ -10,7 +10,16 @@ export HOST_PROJECT="gcp-prod-edp-hub-vpchost"
 export DATA_PROJECT="pjt-c-admin"
 export REGION="asia-northeast3"
 
-# ---- Bootstrap ----
+# ---- 계정 분리 ----
+#
+# OWNER_USER  : Organization/Project Owner.
+#               **권한(IAM)을 부여할 때만** 사용합니다. 즉 00-bootstrap.sh 전용.
+#               자원 생성/운영에는 사용하지 않습니다.
+#
+# ADMIN_USER  : 실제 배포/운영 주체.
+#               00-bootstrap.sh 에서 Role 을 받은 뒤 10 단계부터 모든 작업을 수행합니다.
+#
+export OWNER_USER="admin@sonmap.net"
 export ADMIN_USER="cho@sonmap.net"
 export VM_SA="620081195575-compute@developer.gserviceaccount.com"
 export TFSTATE_BUCKET="gcp-prod-edp-edge-509423-l2comm-tfstate"   # gcloud 전환 시 선택사항
@@ -71,6 +80,49 @@ export CLOUDBUILD_P4SA="service-${EDGE_PROJECT_NUMBER}@gcp-sa-cloudbuild.iam.gse
 # 아래 헬퍼로 재실행(멱등성)을 보장합니다.
 
 log() { printf '\033[1;34m[%s]\033[0m %s\n' "$(date +%H:%M:%S)" "$*"; }
+
+# 현재 gcloud 활성 계정
+current_account() { gcloud config get-value account 2>/dev/null; }
+
+# 실행 계정 확인.
+#   require_account "${OWNER_USER}"  -> Owner 로 실행해야 하는 단계 (권한 부여)
+#   require_account "${ADMIN_USER}"  -> 배포 주체로 실행해야 하는 단계
+# SKIP_ACCOUNT_CHECK=1 로 우회할 수 있습니다.
+require_account() {
+  local expected="$1" actual
+  actual="$(current_account)"
+
+  if [[ "${SKIP_ACCOUNT_CHECK:-0}" == "1" ]]; then
+    log "계정 확인 생략 (SKIP_ACCOUNT_CHECK=1). 현재 계정: ${actual:-<없음>}"
+    return 0
+  fi
+
+  if [[ -z "${actual}" ]]; then
+    echo "ERROR: gcloud 활성 계정이 없습니다. 먼저 로그인하십시오:" >&2
+    echo "  gcloud auth login ${expected}" >&2
+    exit 1
+  fi
+
+  if [[ "${actual}" != "${expected}" ]]; then
+    cat >&2 <<MSG
+ERROR: 이 단계는 '${expected}' 계정으로 실행해야 합니다.
+       현재 계정: ${actual}
+
+  계정 분리 원칙
+    ${OWNER_USER}  : Owner. 권한(IAM) 부여 전용 -> 00-bootstrap.sh
+    ${ADMIN_USER}  : 배포/운영 주체          -> 10 단계 이후 전부
+
+  전환:
+    gcloud config set account ${expected}
+    (최초 1회) gcloud auth login ${expected}
+
+  의도적으로 다른 계정을 쓰려면 SKIP_ACCOUNT_CHECK=1 을 지정하십시오.
+MSG
+    exit 1
+  fi
+
+  log "실행 계정 확인: ${actual}"
+}
 
 # 이미 존재하면 409 를 무시하고 넘어감
 ok_if_exists() {
