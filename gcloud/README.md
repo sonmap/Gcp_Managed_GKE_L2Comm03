@@ -17,6 +17,7 @@
 | `00-env.sh` | `*/variables.tf`, `*/terraform.tfvars.example` | 공통 변수 + 멱등 헬퍼. 모든 스크립트가 `source` |
 | `00-bootstrap.sh` | `terraform/00-bootstrap` | API 활성화 / 프로젝트 IAM **(Owner 실행)** |
 | `10-network.sh` | `terraform/10-network` | Shared VPC 연결 / Subnet / Subnet IAM **(Owner 실행)** |
+| `11-firewall.sh` | — (신규) | Host 방화벽: GKE→VM NFS(2049), Control Plane→Node(konnectivity) **(Owner 실행, 클러스터 생성 후)** |
 | `05-check-permissions.sh` | — (신규) | 배포 주체 권한 사전 점검. `test-iam-permissions` 로 누락 Role 을 미리 식별 |
 | `20-source-connection.sh` | `20-source-connection/README.md` | Cloud Build GitHub Repository 연결 |
 | `30-platform.sh` | `terraform/30-infra-manager` | AR / SA / Trigger / GKE Autopilot / Namespace / KSA |
@@ -41,6 +42,12 @@ gcloud config set account cho@sonmap.net
 ./gcloud/05-check-permissions.sh   # 권한 사전 점검
 ./gcloud/20-source-connection.sh
 ./gcloud/30-platform.sh      # GKE 생성 15~25분
+
+# --- Owner 로 복귀: 방화벽은 클러스터 생성 후 ---
+gcloud config set account admin@sonmap.net
+./gcloud/11-firewall.sh
+
+gcloud config set account cho@sonmap.net
 ./gcloud/99-verify.sh
 ```
 

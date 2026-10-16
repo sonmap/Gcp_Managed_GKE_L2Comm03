@@ -12,7 +12,7 @@ VPC 내부 Ubuntu VM 한 대에서 `git clone` 부터 배치 실행·결과 확�
 
 | 계정 | 용도 | 사용 단계 |
 |---|---|---|
-| `admin@sonmap.net` | Owner. **권한(IAM) 부여 + 네트워크 관리** | §4, §5 |
+| `admin@sonmap.net` | Owner. **권한(IAM) 부여 + 네트워크 관리** | §4, §5, §10-3 |
 | `cho@sonmap.net` | 배포·운영 주체 | §6 이후 전부 (§6-2 권한 사전 점검 필수) |
 
 각 스크립트는 시작 시 실행 계정을 검증하고, 틀리면 전환 방법을 안내하며 중단합니다.
@@ -736,106 +736,68 @@ VM 내부 IP 를 기록해 둡니다.
 hostname -I | awk '{print $1}'
 ```
 
-### 10-3. 방화벽 (GKE → VM NFS 2049)
+### 10-3. 방화벽 구성 — **Owner 계정**
 
-Pod 가 VM 의 NFS 를 마운트하므로 Node/Pod 대역에서 TCP 2049 허용이 필요합니다.
+Host 프로젝트에 두 종류의 규칙이 필요합니다.
 
-```bash
-gcloud compute firewall-rules list \
-  --project=gcp-prod-edp-hub-vpchost \
-  --filter="network:vpc-prod-edp-hub" \
-  --format="table(name, sourceRanges.list(), allowed[].map().firewall_rule().list(), targetTags.list())" \
-  | grep -E "NAME|2049"
-```
+| 규칙 | 경로 | 없으면 |
+|---|---|---|
+| `fw-allow-l2comm-nfs` | GKE Node/Pod → VM NFS (tcp:2049) | PVC 가 `Pending` 에서 멈춤 |
+| `fw-l2comm-master-to-node` | Control Plane(`10.254.5.0/28`) → Node (tcp:10250 등) | `kubectl logs` / `exec` 가 `No agent available` |
 
-> `allowed.ports` 는 Compute API 의 서버측 필터가 지원하지 않습니다.
-> (`Invalid list filter expression`) 포트는 위처럼 `grep` 으로 거릅니다.
+두 번째 규칙은 Shared VPC 환경에서 GKE 가 Host 프로젝트에 자동 생성하지
+못하는 경우가 있어 명시적으로 만듭니다. Job 실행 자체에는 영향이 없지만
+로그와 exec 가 막힙니다.
 
-출력이 없으면 2049 허용 규칙이 없는 것이므로 아래에서 생성합니다.
-
-규칙이 없으면 생성합니다 (VM 에 `l2comm-nfs` 태그를 붙인 뒤 사용).
+> **선행 조건**: 노드 네트워크 태그를 조회해야 하므로 클러스터에 노드가
+> 한 번이라도 기동된 뒤 실행하십시오. 배치를 한 번 돌리면 노드가 뜹니다.
+> 아직이면 §11 을 먼저 수행하고 여기로 돌아오셔도 됩니다.
 
 ```bash
-gcloud compute firewall-rules create fw-allow-l2comm-nfs \
-  --project=gcp-prod-edp-hub-vpchost \
-  --network=vpc-prod-edp-hub \
-  --direction=INGRESS \
-  --action=ALLOW \
-  --rules=tcp:2049 \
-  --source-ranges=10.252.1.0/24,100.64.128.0/19 \
-  --target-tags=l2comm-nfs \
-  --description="GKE node/pod -> L2Comm PoC NFS server"
-```
+cd ~/Gcp_Managed_GKE_L2Comm03
 
-VM 에 태그 부여 (VM 이름과 zone 은 실제 값으로):
-
-```bash
-gcloud compute instances add-tags <VM_NAME> \
-  --zone=<VM_ZONE> \
-  --project=<VM_PROJECT> \
-  --tags=l2comm-nfs
-```
-
-### 10-3b. 방화벽 (Control Plane → Node) — **Owner 계정**
-
-Private cluster 에서 `kubectl logs` / `exec` 는 konnectivity 를 통해
-컨트롤 플레인이 노드에 접속합니다. Shared VPC 환경에서는 이 규칙이
-Host 프로젝트에 자동 생성되지 않는 경우가 있고, 그러면 다음이 발생합니다.
-
-```text
-Error from server: Get "https://10.252.1.x:10250/containerLogs/...": No agent available
-```
-
-> Job 실행 자체는 영향을 받지 않습니다. 로그와 exec 만 막힙니다.
-
-확인:
-
-```bash
-gcloud compute firewall-rules list \
-  --project=gcp-prod-edp-hub-vpchost \
-  --filter="network:vpc-prod-edp-hub" \
-  --format="table(name, sourceRanges.list(), allowed[].map().firewall_rule().list(), targetTags.list())" \
-  | grep -E "NAME|10.254.5"
-```
-
-Control Plane CIDR `10.254.5.0/28` 에서 오는 규칙이 없으면 생성합니다.
-먼저 노드 네트워크 태그를 확인합니다.
-
-```bash
-NODE_TAG=$(gcloud compute firewall-rules list \
-  --project=gcp-prod-edp-hub-vpchost \
-  --filter="name~gke-gke-l2comm-batch-an3" \
-  --format="value(targetTags.list())" | head -1)
-echo "NODE_TAG=${NODE_TAG}"
-```
-
-기대: `gke-gke-l2comm-batch-an3-<hash>-node`
-
-Owner 계정으로 생성합니다.
-
-```bash
 gcloud config set account admin@sonmap.net
-
-gcloud compute firewall-rules create gke-l2comm-batch-an3-master \
-  --project=gcp-prod-edp-hub-vpchost \
-  --network=vpc-prod-edp-hub \
-  --direction=INGRESS --action=ALLOW \
-  --rules=tcp:10250,tcp:443,tcp:8443,tcp:9443,tcp:15017 \
-  --source-ranges=10.254.5.0/28 \
-  --target-tags="${NODE_TAG}" \
-  --description="GKE control plane -> l2comm nodes (konnectivity, webhooks)"
-
+./gcloud/11-firewall.sh
 gcloud config set account cho@sonmap.net
 ```
 
-확인:
+스크립트가 하는 일:
+
+1. 현재 규칙 목록 출력
+2. `fw-allow-l2comm-nfs` 생성 (이미 있으면 SKIP)
+3. NFS 서버 VM 에 `l2comm-nfs` 태그 부여
+   (실행 중인 VM 을 메타데이터로 자동 인식, 이미 있으면 SKIP)
+4. 노드 네트워크 태그를 자동 조회해 `fw-l2comm-master-to-node` 생성
+5. 결과 출력
+
+다른 VM 이 NFS 서버이면 지정해 실행합니다.
+
+```bash
+NFS_VM_NAME=<VM> NFS_VM_ZONE=<ZONE> NFS_VM_PROJECT=<PRJ> \
+  ./gcloud/11-firewall.sh
+```
+
+### 확인
+
+```bash
+gcloud compute firewall-rules list \
+  --project=gcp-prod-edp-hub-vpchost \
+  --filter="network:vpc-prod-edp-hub" \
+  --format="table(name, sourceRanges.list(), allowed[].map().firewall_rule().list(), targetTags.list())" \
+  | grep -E "NAME|2049|10.254.5"
+```
+
+기대: 2049 규칙과 `10.254.5.0/28` 출발 규칙이 모두 보임.
 
 ```bash
 export KUBECONFIG=$HOME/.kube/config_new-autopilot
 kubectl -n kube-system get pods -l k8s-app=konnectivity-agent
 ```
 
-기대: `Running`. 이후 `kubectl logs` 가 정상 동작합니다.
+기대: `Running`.
+
+> `allowed.ports` 는 Compute API 의 서버측 필터가 지원하지 않습니다.
+> (`Invalid list filter expression`) 포트는 위처럼 `grep` 으로 거릅니다.
 
 ### 10-4. 클러스터 자격증명
 
@@ -1117,14 +1079,14 @@ crontab -l
 | Build `denied: ...uploadArtifacts` | Build SA 의 AR writer 누락 | AR 이 Host 프로젝트이므로 **저장소 레벨** writer 확인 (8-1) |
 | Pod `ImagePullBackOff` | 크로스 프로젝트 AR 권한 | 저장소 레벨 reader 확인 (8-1), `AUTOPILOT_NODE_SA` 값 대조 |
 | Pod 에서 BigQuery 403 | Workload Identity 미연결 | KSA 어노테이션(10-5)과 `workloadIdentityUser`(8-5) 확인, 10-6 으로 실동작 검증 |
-| PVC `Pending` | NFS 미기동 / IP 불일치 / 방화벽 | 10-2, 10-3 확인. `--nfs-server <VM_IP>` 로 명시 지정 |
+| PVC `Pending` | NFS 미기동 / IP 불일치 / 방화벽 | §10-2 확인, Owner 로 `./gcloud/11-firewall.sh` 실행. `--nfs-server <VM_IP>` 로 명시 지정 |
 | Job 생성 403 | 실행 주체 권한 | `container.developer` 확인 (8-3) |
 | `cloudbuild.connections.list denied` | 배포 주체에 `cloudbuild.connectionAdmin` 없음 | §6-2 로 점검 후 Owner 로 `00-bootstrap.sh` 재실행 |
 | 저장소 추가 시 `NOT_FOUND` / `PERMISSION_DENIED` | GitHub App 이 L2Comm03 에 접근 불가 | §7-2 에서 GitHub App Repository access 에 L2Comm03 추가 |
 | `BigQuery error ... This feature requires allowlisting` | `bq add-iam-policy-binding --dataset` 미지원 조직 | 자동으로 dataset ACL 방식으로 폴백됨. 8-4 로 `WRITER` 부여 확인 |
 | 빌드 로그에 `REPO_FULL_NAME: ...L2Comm02` | L2Comm02 트리거를 재사용함 | `trg-l2comm03-python-image` 를 사용. 최신 소스로 `git pull` 후 `30-platform.sh` 재실행 |
 | `triggers create github: unrecognized arguments: <트리거명>` | 트리거 이름을 위치 인자로 전달 | 최신 소스로 `git pull`. `--name=` 플래그를 사용하도록 수정됨 |
-| `kubectl logs` 가 `No agent available` | Private cluster 의 konnectivity 미연결 (마스터→노드 방화벽 누락) | Job 자체는 정상. `client_gke` 가 Cloud Logging 으로 자동 폴백함. 근본 해결은 §10-3b 로 마스터 규칙 생성 |
+| `kubectl logs` 가 `No agent available` | Private cluster 의 konnectivity 미연결 (마스터→노드 방화벽 누락) | Job 자체는 정상. `client_gke` 가 Cloud Logging 으로 자동 폴백함. 근본 해결은 Owner 로 `./gcloud/11-firewall.sh` 실행 (§10-3) |
 | NFS 샘플 실행 로그가 비어 있음 | 이전 저장소(L2Comm02)의 `mnt/` 가 export 중 | `findmnt /srv/l2comm-nfs` 확인 후 `sudo bash /ssw/dlk/setup-nfs-server.sh` 재실행 |
 | 적재했는데 `row_count` 가 늘지 않음 | 조회 샘플(`bq_sample.py`)만 실행함 | 적재는 `/app` + `main.py` (11-2). NFS 샘플은 조회 전용 |
 | `Invalid value for field 'filter'` (firewall-rules list) | `allowed.ports` 는 서버측 필터 미지원 | 네트워크로만 필터하고 포트는 `grep 2049` 로 거름 (10-3) |

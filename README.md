@@ -134,7 +134,12 @@ gcloud config set account admin@sonmap.net
 
 ./gcloud/00-bootstrap.sh          # API 활성화 / IAM 부여
 ./gcloud/10-network.sh            # Shared VPC / Subnet / Subnet IAM
+./gcloud/11-firewall.sh           # NFS 2049 / Control Plane→Node 방화벽
 ```
+
+> `11-firewall.sh` 는 노드 네트워크 태그를 조회하므로 클러스터 생성
+> (`30-platform.sh`) 이후에 실행합니다. 2단계를 먼저 끝내고 Owner 로
+> 돌아와 실행하십시오.
 
 ### 2단계 — 배포 주체 계정
 
@@ -171,6 +176,7 @@ gcloud/                     # 프로비저닝 스크립트 (L2Comm02의 terrafor
 ├─ 00-env.sh                # 공통 변수 + 멱등 헬퍼
 ├─ 00-bootstrap.sh
 ├─ 10-network.sh
+├─ 11-firewall.sh            # Host 방화벽 (NFS / Control Plane→Node)
 ├─ 05-check-permissions.sh   # 배포 주체 권한 사전 점검
 ├─ 20-source-connection.sh
 ├─ 30-platform.sh
