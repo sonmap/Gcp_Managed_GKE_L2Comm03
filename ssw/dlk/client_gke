@@ -23,6 +23,8 @@ RUNTIME_GSA="sa-l2comm-gke@gcp-prod-edp-edge-509423.iam.gserviceaccount.com"
 
 # Batch 대상 BigQuery (Pod 환경변수로 전달)
 TARGET_PROJECT="${TARGET_PROJECT:-pjt-c-admin}"
+# Cloud Logging 조회 대상(클러스터가 있는 프로젝트)
+LOG_PROJECT="${LOG_PROJECT:-gcp-prod-edp-edge-509423}"
 TARGET_DATASET="${TARGET_DATASET:-dlk_sample}"
 TARGET_TABLE="${TARGET_TABLE:-gcp_region_inventory}"
 
@@ -65,6 +67,7 @@ Environment:
   TARGET_PROJECT  default: pjt-c-admin
   TARGET_DATASET  default: dlk_sample
   TARGET_TABLE    default: gcp_region_inventory
+  LOG_PROJECT     default: gcp-prod-edp-edge-509423 (Cloud Logging 폴백 조회 대상)
 USAGE
 }
 
@@ -267,7 +270,32 @@ set -e
 
 echo
 echo "================ JOB LOG ================"
-kubectl -n "$NAMESPACE" logs "job/$JOB_NAME" --all-containers --tail=-1 || true
+# Private cluster 에서 konnectivity 가 연결되지 않으면 kubectl logs 가
+#   Error from server: ... "No agent available"
+# 로 실패합니다. 그 경우 Cloud Logging 에서 같은 로그를 받아옵니다.
+set +e
+LOG_OUT="$(kubectl -n "$NAMESPACE" logs "job/$JOB_NAME" --all-containers --tail=-1 2>&1)"
+LOG_RC=$?
+set -e
+
+if [[ ${LOG_RC} -eq 0 && -n "${LOG_OUT}" ]]; then
+  printf '%s\n' "${LOG_OUT}"
+else
+  echo "[WARN] kubectl logs 실패 -> Cloud Logging 으로 조회합니다."
+  [[ -n "${LOG_OUT}" ]] && echo "       사유: $(head -1 <<<"${LOG_OUT}")"
+  echo
+  gcloud logging read \
+    "resource.type=\"k8s_container\"
+     resource.labels.namespace_name=\"${NAMESPACE}\"
+     labels.\"k8s-pod/job-name\"=\"${JOB_NAME}\"" \
+    --project="${LOG_PROJECT}" \
+    --limit=200 --freshness=1h \
+    --format="value(textPayload)" --order=asc 2>/dev/null \
+    || echo "[WARN] Cloud Logging 조회도 실패했습니다. 아래로 직접 확인하십시오."
+  echo
+  echo "  gcloud logging read 'resource.labels.namespace_name=\"${NAMESPACE}\"' \\"
+  echo "    --project=${LOG_PROJECT} --limit=50 --freshness=1h"
+fi
 echo "========================================="
 
 if [[ $WAIT_RC -ne 0 ]]; then

@@ -1008,6 +1008,7 @@ crontab -l
 | `BigQuery error ... This feature requires allowlisting` | `bq add-iam-policy-binding --dataset` 미지원 조직 | 자동으로 dataset ACL 방식으로 폴백됨. 8-4 로 `WRITER` 부여 확인 |
 | 빌드 로그에 `REPO_FULL_NAME: ...L2Comm02` | L2Comm02 트리거를 재사용함 | `trg-l2comm03-python-image` 를 사용. 최신 소스로 `git pull` 후 `30-platform.sh` 재실행 |
 | `triggers create github: unrecognized arguments: <트리거명>` | 트리거 이름을 위치 인자로 전달 | 최신 소스로 `git pull`. `--name=` 플래그를 사용하도록 수정됨 |
+| `kubectl logs` 가 `No agent available` | Private cluster 의 konnectivity 미연결 (마스터→노드 방화벽) | Job 자체는 정상. `client_gke` 가 Cloud Logging 으로 자동 폴백함. 근본 해결은 마스터 CIDR(10.254.5.0/28)→노드 tcp:10250 허용 규칙 확인 |
 | `Invalid value for field 'filter'` (firewall-rules list) | `allowed.ports` 는 서버측 필터 미지원 | 네트워크로만 필터하고 포트는 `grep 2049` 로 거름 (10-3) |
 | `git pull` 이 local changes 로 중단 | `chmod +x` 로 인한 권한 비트 변경 | `git checkout -- <파일>` 후 재시도. 반복되면 `git config core.fileMode false` |
 | `/ssw/dlk already exists and is not the expected symlink` | L2Comm02 체크아웃을 가리키는 링크가 남음 | `readlink -f /ssw/dlk` 확인 후 `REPOINT=true bash ssw/dlk/install-vm.sh` (실제 디렉터리면 백업 후 재실행) |
