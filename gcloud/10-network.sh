@@ -25,7 +25,7 @@ read -r -p "계속하려면 Enter, 중단하려면 Ctrl+C: " _
 ###############################################################################
 # 1) API  (google_project_service)
 ###############################################################################
-gcloud services enable cloudscheduler.googleapis.com secretmanager.googleapis.com \
+gcloud services enable secretmanager.googleapis.com \
   --project="${EDGE_PROJECT}"
 
 ###############################################################################

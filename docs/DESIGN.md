@@ -19,8 +19,10 @@ Organization / Existing Environment
 |   |   +-- KSA: ksa-l2comm-batch
 |   +-- Artifact Registry: ar-l2comm-python
 |   +-- Cloud Build Trigger: trg-l2comm-python-image
-|   +-- Workflow: wf-l2comm-gke-job
-|   +-- Scheduler: sch-l2comm-gke-job
+|
++-- Batch 실행 (VPC 내부 VM)
+|   +-- ssw/dlk/run-gke.sh   (파라미터 10개)
+|       +-- ssw/dlk/client_gke  -> kubectl apply -> GKE Job
 |
 +-- Data Project: pjt-c-admin
     +-- Dataset: dlk_sample
@@ -97,22 +99,44 @@ On-Prem
 
 ### `sa-l2comm-gke` Role 구성
 
-기존 3개 SA Role 의 합집합입니다.
+Build + Runtime Role 집합입니다.
 
 | Role | 출처 | 용도 |
 |---|---|---|
 | `roles/artifactregistry.writer` | cloudbuild | Image Push |
 | `roles/logging.logWriter` | cloudbuild | Build 로그 |
 | `roles/storage.objectViewer` | cloudbuild | Build 소스 읽기 |
-| `roles/container.developer` | workflow | GKE Job 생성 |
-| `roles/workflows.invoker` | workflow | Workflow 실행 |
 | `roles/bigquery.jobUser` | runtime | BigQuery Job 실행 |
 | `roles/compute.viewer` | runtime | Region inventory 조회 |
 | `roles/bigquery.dataEditor` (Dataset) | runtime | `pjt-c-admin:dlk_sample` 적재 |
 
+Workflows 를 사용하지 않으므로 `roles/workflows.invoker` 는 제거했습니다.
+Job 생성 권한 `roles/container.developer` 는 SA 가 아니라 **run-gke.sh 실행 주체**
+(`chomap@sonmap.net`, VM 기본 SA)에 부여합니다.
+
 > **트레이드오프**: Build 주체와 Runtime 주체가 같은 SA 를 쓰게 되므로
 > 최소권한 분리는 약해집니다. 운영 전환 시 권한 분리가 요구되면
 > `00-env.sh` 의 `SA_GKE` 를 용도별로 되돌리는 것으로 복원할 수 있습니다.
+
+## Batch 실행 경로
+
+```
+run-gke.sh (FROM_BASE_YMD TO_BASE_YMD CURR_YMD CURR_TIME
+            VM_GPU VM_CPU VM_MEM WORKING_DIRECTORY
+            PROGRAM_PATH PROGRAM_PARAM)
+  -> client_gke
+       - NFS PV/PVC 생성 또는 재사용
+       - batch/v1 Job 매니페스트 생성 (backoffLimit 1, ttl 600s)
+       - kubectl apply -> kubectl wait --for=condition=complete
+  -> GKE Autopilot Job
+  -> Artifact Registry Image Pull (기존 이미지 재사용)
+  -> Python Batch
+  -> BigQuery pjt-c-admin.dlk_sample.gcp_region_inventory
+  -> Job Complete / Pod 종료
+```
+
+Private endpoint 클러스터이므로 VPC 내부 VM 에서만 실행됩니다.
+정기 실행은 Cloud Scheduler 가 아니라 VM 의 `crontab` 으로 처리합니다.
 
 ## CI/CD vs Runtime Separation
 

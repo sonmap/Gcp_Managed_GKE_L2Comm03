@@ -26,8 +26,8 @@ GitHub main push
   -> python-bq-batch:v1 저장
 
 [Batch Runtime - 매 실행 시]
-Cloud Scheduler
-  -> Workflows
+run-gke.sh (파라미터 10개)
+  -> client_gke
   -> GKE Autopilot Job
   -> 기존 Artifact Registry Image Pull
   -> Python Batch
@@ -35,7 +35,38 @@ Cloud Scheduler
   -> Job Complete / Pod 종료
 ```
 
-> 이미지 Build와 Batch 실행을 분리합니다. Scheduler가 여러 번 실행되어도 소스 변경이 없다면 Docker Image를 매번 Build하지 않습니다.
+> **Workflows / Cloud Scheduler를 타지 않습니다.** VM에서 `run-gke.sh`가 `client_gke`를
+> 통해 GKE API로 Job을 직접 생성하고 완료까지 대기합니다.
+>
+> 이미지 Build와 Batch 실행은 분리되어 있습니다. `run-gke.sh`를 여러 번 실행해도
+> 소스 변경이 없다면 Docker Image를 다시 Build하지 않습니다.
+
+### 배치 실행 예시
+
+```bash
+DRY_RUN=0 \
+DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-python/python-bq-batch:v1 \
+./ssw/dlk/run-gke.sh \
+  20261016 20261016 20261016 180000 \
+  0 4 16 \
+  /mnt/l2comm/python \
+  python bq_sample.py
+```
+
+| # | 파라미터 | 예시 |
+|---|---|---|
+| 1 | `FROM_BASE_YMD` | `20261016` |
+| 2 | `TO_BASE_YMD` | `20261016` |
+| 3 | `CURR_YMD` | `20261016` |
+| 4 | `CURR_TIME` | `180000` |
+| 5 | `VM_GPU` | `0` |
+| 6 | `VM_CPU` | `4` |
+| 7 | `VM_MEM` (GiB) | `16` |
+| 8 | `WORKING_DIRECTORY` | `/mnt/l2comm/python` |
+| 9 | `PROGRAM_PATH` | `python` |
+| 10 | `PROGRAM_PARAM` | `bq_sample.py` |
+
+정기 실행이 필요하면 VM의 `crontab`에서 `run-gke.sh`를 호출합니다.
 
 ---
 
@@ -44,14 +75,13 @@ Cloud Scheduler
 | 구분 | Project / Resource | 역할 |
 |---|---|---|
 | Shared VPC Host | `gcp-prod-edp-hub-vpchost` | VPC/Subnet 소유 |
-| Edge / Runtime | `gcp-prod-edp-edge-509423` | GKE, Workflow, Cloud Build, AR, Scheduler |
+| Edge / Runtime | `gcp-prod-edp-edge-509423` | GKE, Cloud Build, Artifact Registry |
 | Data | `pjt-c-admin` | BigQuery 데이터 저장 |
 | VPC | `vpc-prod-edp-hub` | 기존 172 서비스망과 신규 GKE 대역 공존 |
 | GKE | `gke-l2comm-batch-an3` | Private GKE Autopilot |
 | Artifact Registry | `ar-l2comm-python` | Python batch image |
-| Workflow | `wf-l2comm-gke-job` | Kubernetes Job 생성/대기 |
-| Scheduler | `sch-l2comm-gke-job` | Workflow 정기 호출 |
-| 통합 SA | `sa-l2comm-gke` | Build / Workflow / Scheduler / Runtime 전 구간 |
+| Batch 실행 | `ssw/dlk/run-gke.sh` + `client_gke` | Kubernetes Job 생성/대기 (Workflows 미사용) |
+| 통합 SA | `sa-l2comm-gke` | Build / Runtime 전 구간 |
 | 배포 주체 | `chomap@sonmap.net` | gcloud 스크립트 실행 |
 
 ---
@@ -90,10 +120,11 @@ vi gcloud/00-env.sh
 ./gcloud/00-bootstrap.sh          # API / SA / IAM
 ./gcloud/10-network.sh            # Shared VPC / Subnet / Subnet IAM
 ./gcloud/20-source-connection.sh  # Cloud Build GitHub Repository 연결
-./gcloud/30-platform.sh           # AR / SA / Trigger / GKE Autopilot / Workflow
-./gcloud/40-scheduler.sh          # Cloud Scheduler
+./gcloud/30-platform.sh           # AR / SA / Trigger / GKE Autopilot / Namespace / KSA
 ./gcloud/99-verify.sh             # 전체 상태 점검
 ```
+
+배치 실행은 프로비저닝이 아니라 VPC 내부 VM에서 수행합니다 (§1 참고).
 
 `30-platform.sh` 의 GKE Autopilot 생성에 15~25분이 소요됩니다.
 각 스크립트는 멱등이므로 중간 실패 후 재실행해도 안전합니다.
@@ -111,10 +142,8 @@ gcloud/                     # 프로비저닝 스크립트 (L2Comm02의 terrafor
 ├─ 10-network.sh
 ├─ 20-source-connection.sh
 ├─ 30-platform.sh
-├─ 40-scheduler.sh
 ├─ 90-teardown.sh           # terraform destroy 대체
 ├─ 99-verify.sh             # terraform output / plan 대체
-├─ workflow.yaml.tmpl       # Workflows 정의 (templatefile 대체)
 └─ README.md
 
 app/                        # Python batch + Dockerfile
@@ -162,8 +191,8 @@ asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-python/python-
 ```
 Cloud Build SUCCESS
 -> Artifact Registry Image 생성
--> Scheduler
--> Workflow
+-> run-gke.sh
+-> client_gke
 -> GKE Job Complete 1/1
 -> BigQuery pjt-c-admin.dlk_sample.gcp_region_inventory
 -> 43 rows 적재

@@ -18,7 +18,6 @@ EDGE_APIS=(
   bigquery.googleapis.com
   cloudbuild.googleapis.com
   cloudresourcemanager.googleapis.com
-  cloudscheduler.googleapis.com
   compute.googleapis.com
   container.googleapis.com
   iam.googleapis.com
@@ -28,9 +27,9 @@ EDGE_APIS=(
   secretmanager.googleapis.com
   serviceusage.googleapis.com
   storage.googleapis.com
-  workflows.googleapis.com
-  workflowexecutions.googleapis.com
 )
+# Workflows / Cloud Scheduler 는 L2Comm03 런타임 경로에서 사용하지 않습니다.
+# (run-gke.sh -> client_gke -> GKE Job 직접 실행)
 # Infra Manager 를 쓰지 않으면 config.googleapis.com 은 제외
 [[ "${CREATE_INFRAMGR}" == "true" ]] && EDGE_APIS+=(config.googleapis.com)
 

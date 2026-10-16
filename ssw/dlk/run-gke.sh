@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# OCR-compatible input contract
+# OCR-compatible input contract - 10 parameters
 # $1  FROM_BASE_YMD
 # $2  TO_BASE_YMD
 # $3  CURR_YMD
@@ -11,15 +11,21 @@ set -euo pipefail
 # $7  VM_MEM
 # $8  WORKING_DIRECTORY  (path inside the Pod; normally /mnt/l2comm/...)
 # $9  PROGRAM_PATH       (for example: python)
-# $10... PROGRAM_PARAM
+# $10... PROGRAM_PARAM   (required; one or more)
+#
+# Execution path (Workflows / Cloud Scheduler are NOT used):
+#   run-gke.sh -> client_gke -> GKE Job -> AR image pull -> Python -> BigQuery
 
-if [[ $# -lt 9 ]]; then
+if [[ $# -lt 10 ]]; then
   cat <<'USAGE'
 Usage:
   run-gke.sh FROM_BASE_YMD TO_BASE_YMD CURR_YMD CURR_TIME \
-    VM_GPU VM_CPU VM_MEM WORKING_DIRECTORY PROGRAM_PATH [PROGRAM_PARAM...]
+    VM_GPU VM_CPU VM_MEM WORKING_DIRECTORY PROGRAM_PATH PROGRAM_PARAM [PROGRAM_PARAM...]
+
+  10 parameters are required (PROGRAM_PARAM is the 10th).
 
 Example:
+  DRY_RUN=0 \
   DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-python/python-bq-batch:v1 \
   /ssw/dlk/run-gke.sh \
     20261008 20261008 20261008 180000 \

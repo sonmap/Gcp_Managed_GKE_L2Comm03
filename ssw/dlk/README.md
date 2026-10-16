@@ -20,19 +20,56 @@ Gcp_Managed_GKE_L2Comm03
 실행 흐름:
 
 ```text
-run-gke.sh
+run-gke.sh  (파라미터 10개)
    ↓
 client_gke
    ├─ ~/.kube/config_new-autopilot
    ├─ Namespace / KSA 확인
    ├─ NFS PV 생성/재사용
    ├─ NFS PVC 생성/재사용
-   └─ Pod 생성
+   └─ GKE Job 생성 (batch/v1)
         ↓
-GKE Autopilot Pod
+GKE Autopilot Job → Pod
+   ├─ Artifact Registry Image Pull (기존 이미지 재사용)
    ├─ /mnt/l2comm ← NFS mount
    └─ Python BigQuery sample 실행
+        ↓
+   kubectl wait --for=condition=complete → 로그 출력 → Job 정리
 ```
+
+> Cloud Workflows / Cloud Scheduler를 거치지 않습니다. `client_gke`가 GKE API로
+> Job을 직접 생성하고 완료까지 대기합니다.
+
+파라미터 계약 (10개):
+
+| # | 파라미터 | 예시 |
+|---|---|---|
+| 1 | `FROM_BASE_YMD` | `20261016` |
+| 2 | `TO_BASE_YMD` | `20261016` |
+| 3 | `CURR_YMD` | `20261016` |
+| 4 | `CURR_TIME` | `180000` |
+| 5 | `VM_GPU` | `0` |
+| 6 | `VM_CPU` | `4` |
+| 7 | `VM_MEM` (GiB) | `16` |
+| 8 | `WORKING_DIRECTORY` | `/mnt/l2comm/python` |
+| 9 | `PROGRAM_PATH` | `python` |
+| 10 | `PROGRAM_PARAM` | `bq_sample.py` |
+
+실행 예시:
+
+```bash
+DRY_RUN=0 \
+DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-python/python-bq-batch:v1 \
+/ssw/dlk/run-gke.sh \
+  20261016 20261016 20261016 180000 \
+  0 4 16 \
+  /mnt/l2comm/python \
+  python bq_sample.py
+```
+
+`DRY_RUN`을 생략하면 기본값 `1`이라 매니페스트만 출력하고 apply하지 않습니다.
+Job 동작 제어 환경변수: `BACKOFF_LIMIT`(1), `TTL_SECONDS`(600), `JOB_TIMEOUT`(3600),
+`KEEP_JOB=1`(완료 후 Job 보존).
 
 ## 1. VM에 /ssw/dlk 연결
 

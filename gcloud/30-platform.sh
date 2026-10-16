@@ -38,14 +38,17 @@ ok_if_exists gcloud iam service-accounts create "${SA_GKE_NAME}" \
 bind_project "${EDGE_PROJECT}" "serviceAccount:${SA_GKE}" \
   roles/bigquery.jobUser \
   roles/compute.viewer \
-  roles/container.developer \
-  roles/workflows.invoker \
   roles/artifactregistry.writer \
   roles/logging.logWriter \
   roles/storage.objectViewer
 
 bind_project "${EDGE_PROJECT}" "serviceAccount:${AUTOPILOT_NODE_SA}" \
   roles/container.defaultNodeServiceAccount
+
+# Job 생성 주체 권한.
+# Workflows 를 쓰지 않으므로 run-gke.sh 를 실행하는 VM / 사용자가 직접 Job 을 만듭니다.
+bind_project "${EDGE_PROJECT}" "user:${ADMIN_USER}" roles/container.developer
+bind_project "${EDGE_PROJECT}" "serviceAccount:${VM_SA}" roles/container.developer
 
 # 배포 주체가 통합 SA 를 지정해 Workflow/Trigger 를 만들려면 actAs 권한이 필요합니다.
 bind_sa "${SA_GKE}" "user:${ADMIN_USER}" roles/iam.serviceAccountUser
@@ -119,31 +122,30 @@ bind_sa "${SA_GKE}" \
   roles/iam.workloadIdentityUser
 
 ###############################################################################
-# 7) Workflow 배포  (google_workflows_workflow + templatefile)
-#    templatefile() 대신 sed 로 렌더링 후 --source 로 배포
+# 7) Namespace / KSA 사전 생성
+#
+#    Workflows 를 사용하지 않으므로 Namespace 와 KSA 는 여기서 만들어 둡니다.
+#    (ssw/dlk/client_gke 도 없으면 생성하지만, Autopilot 첫 기동 지연을 줄이기 위해
+#     플랫폼 구축 단계에서 미리 만듭니다.)
+#    Private endpoint 클러스터이므로 VPC 내부에서 실행해야 합니다.
 ###############################################################################
-RENDERED="$(mktemp -d)/workflow.yaml"
-sed \
-  -e "s|@@EDGE_PROJECT@@|${EDGE_PROJECT}|g" \
-  -e "s|@@REGION@@|${REGION}|g" \
-  -e "s|@@CLUSTER_NAME@@|${CLUSTER_NAME}|g" \
-  -e "s|@@NAMESPACE@@|${NAMESPACE}|g" \
-  -e "s|@@KSA_NAME@@|${KSA_NAME}|g" \
-  -e "s|@@SA_GKE@@|${SA_GKE}|g" \
-  -e "s|@@IMAGE_URI@@|${IMAGE_URI}|g" \
-  -e "s|@@DATA_PROJECT@@|${DATA_PROJECT}|g" \
-  -e "s|@@TARGET_DATASET@@|${TARGET_DATASET}|g" \
-  -e "s|@@TARGET_TABLE@@|${TARGET_TABLE}|g" \
-  "${SCRIPT_DIR}/workflow.yaml.tmpl" > "${RENDERED}"
-
-log "Workflow 배포: ${WORKFLOW_NAME}  (렌더링 결과: ${RENDERED})"
-# workflows deploy 는 생성/갱신 겸용이라 멱등합니다.
-gcloud workflows deploy "${WORKFLOW_NAME}" \
-  --project="${EDGE_PROJECT}" \
-  --location="${REGION}" \
-  --source="${RENDERED}" \
-  --service-account="${SA_GKE}" \
-  --description="Create and wait for the L2Comm Kubernetes Job on GKE Autopilot"
+if [[ "${SETUP_K8S:-auto}" != "false" ]]; then
+  log "Namespace / KSA 생성 시도 (VPC 내부에서만 성공)"
+  if gcloud container clusters get-credentials "${CLUSTER_NAME}" \
+       --project="${EDGE_PROJECT}" --region="${REGION}" --internal-ip >/dev/null 2>&1 \
+     && kubectl version >/dev/null 2>&1; then
+    kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 \
+      || kubectl create namespace "${NAMESPACE}"
+    kubectl -n "${NAMESPACE}" get serviceaccount "${KSA_NAME}" >/dev/null 2>&1 \
+      || kubectl -n "${NAMESPACE}" create serviceaccount "${KSA_NAME}"
+    kubectl -n "${NAMESPACE}" annotate serviceaccount "${KSA_NAME}" \
+      "iam.gke.io/gcp-service-account=${SA_GKE}" --overwrite
+    log "Namespace / KSA 준비 완료"
+  else
+    log "SKIP: Control Plane 에 접근할 수 없습니다 (VPC 외부이거나 kubectl 미설치)."
+    log "      VPC 내부 VM 에서 ssw/dlk/client_gke 실행 시 자동 생성됩니다."
+  fi
+fi
 
 ###############################################################################
 # 8) terraform output 대체
@@ -156,8 +158,14 @@ artifact_image           : ${IMAGE_URI}
 helm_oci_repository      : oci://${REGION}-docker.pkg.dev/${EDGE_PROJECT}/${AR_HELM}
 cloudbuild_trigger_name  : ${CB_TRIGGER}
 namespace                : ${NAMESPACE}
-service_account          : ${SA_GKE}   (Build / Workflow / Runtime 통합)
-workflow_name            : ${WORKFLOW_NAME}
+ksa                      : ${KSA_NAME}
+service_account          : ${SA_GKE}   (Build / Runtime 통합)
+
+=== 배치 실행 (Workflow/Scheduler 미사용) ===
+VPC 내부 VM 에서:
+  DOCKER_IMAGE=${IMAGE_URI} \\
+  ./ssw/dlk/run-gke.sh 20261016 20261016 20261016 180000 0 4 16 \\
+    /mnt/l2comm/python python bq_sample.py
 EOF
 
 log "30-platform 완료"

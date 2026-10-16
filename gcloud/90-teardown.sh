@@ -6,12 +6,6 @@ source "$(dirname "$0")/00-env.sh"
 
 confirm() { read -r -p "$1 [y/N] " a; [[ "${a}" == "y" || "${a}" == "Y" ]]; }
 
-confirm "Scheduler ${SCHEDULER_JOB} 삭제?" && \
-  gcloud scheduler jobs delete "${SCHEDULER_JOB}" --project="${EDGE_PROJECT}" --location="${REGION}" --quiet
-
-confirm "Workflow ${WORKFLOW_NAME} 삭제?" && \
-  gcloud workflows delete "${WORKFLOW_NAME}" --project="${EDGE_PROJECT}" --location="${REGION}" --quiet
-
 confirm "GKE Cluster ${CLUSTER_NAME} 삭제? (수십 분 소요)" && \
   gcloud container clusters delete "${CLUSTER_NAME}" --project="${EDGE_PROJECT}" --region="${REGION}" --quiet
 

@@ -31,7 +31,6 @@ export IMAGE_NAME="python-bq-batch"
 export IMAGE_TAG="v1"
 export NAMESPACE="l2comm-batch"
 export KSA_NAME="ksa-l2comm-batch"
-export WORKFLOW_NAME="wf-l2comm-gke-job"
 export AUTOPILOT_NODE_SA="541022739403-compute@developer.gserviceaccount.com"
 
 # ---- Cloud Build (20 / 30) ----
@@ -44,10 +43,10 @@ export CB_TRIGGER="trg-l2comm-python-image"
 export TARGET_DATASET="dlk_sample"
 export TARGET_TABLE="gcp_region_inventory"
 
-# ---- Scheduler (40) ----
-export SCHEDULER_JOB="sch-l2comm-gke-job"
-export SCHEDULE_CRON="0 9 * * *"
-export SCHEDULE_TZ="Asia/Seoul"
+# ---- Batch 실행 (run-gke.sh / client_gke) ----
+# Workflows / Cloud Scheduler 를 사용하지 않습니다.
+# 정기 실행이 필요하면 VM 의 crontab 에서 run-gke.sh 를 호출합니다.
+export POD_MOUNT_PATH="${POD_MOUNT_PATH:-/mnt/l2comm}"
 
 # ---- 파생값 ----
 # 통합 서비스 계정.

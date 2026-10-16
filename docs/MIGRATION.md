@@ -16,6 +16,8 @@
 | Build Trigger 감시 경로 | `terraform/30-infra-manager/**` | `gcloud/**` |
 | 배포 주체 | `admin@sonmap.net` → `sa-l2comm-tf-admin` 가장 | `chomap@sonmap.net` 직접 실행 |
 | 런타임 SA | `sa-l2comm-cloudbuild` / `sa-l2comm-workflow` / `sa-l2comm-runtime` | `sa-l2comm-gke` 1개로 통합 |
+| 배치 실행 경로 | Scheduler → Workflows → GKE Job | `run-gke.sh` → `client_gke` → GKE Job |
+| 정기 실행 | Cloud Scheduler | VM `crontab` |
 
 Network 설계값(CIDR / Subnet / Control Plane)은 L2Comm02와 **완전히 동일**하며,
 IAM 주체 구성만 아래와 같이 단순화했습니다.
@@ -39,8 +41,6 @@ sa-l2comm-runtime         ──┘
 |---|---|
 | `cloudbuild/cloudbuild.yaml` | `serviceAccount:` → `sa-l2comm-gke` |
 | Cloud Build Trigger | `--service-account` → `sa-l2comm-gke` |
-| Workflows | `--service-account` → `sa-l2comm-gke` |
-| Cloud Scheduler | `--oauth-service-account-email` → `sa-l2comm-gke` |
 | Workload Identity | `ksa-l2comm-batch` → `sa-l2comm-gke` |
 | `helm/l2comm-batch/values.yaml` | `gcpServiceAccount` → `sa-l2comm-gke` |
 | `ssw/dlk/client_gke` | `RUNTIME_GSA` → `sa-l2comm-gke` |
@@ -53,7 +53,7 @@ sa-l2comm-runtime         ──┘
 L2Comm02 자원이 이미 떠 있다면 통합 SA 생성 후 기존 3개 SA 를 정리합니다.
 
 ```bash
-./gcloud/30-platform.sh   # sa-l2comm-gke 생성 + 참조 갱신 (Workflow/Trigger 재배포)
+./gcloud/30-platform.sh   # sa-l2comm-gke 생성 + Trigger 재배포 + Namespace/KSA 갱신
 
 # 신규 Job/Build 가 정상 동작하는 것을 확인한 뒤 삭제
 for S in sa-l2comm-runtime sa-l2comm-workflow sa-l2comm-cloudbuild sa-l2comm-tf-admin; do
@@ -66,6 +66,30 @@ done
 > SA 삭제 전에 `remove-iam-policy-binding` 으로 부여된 Role 을 먼저 회수하십시오.
 > 삭제된 SA 의 바인딩은 `deleted:serviceAccount:...` 형태로 정책에 잔류합니다.
 
+### Workflows / Scheduler 정리
+
+L2Comm02 에서 넘어오는 경우 더 이상 쓰이지 않는 자원을 삭제합니다.
+
+```bash
+gcloud scheduler jobs delete sch-l2comm-gke-job \
+  --project=gcp-prod-edp-edge-509423 --location=asia-northeast3
+
+gcloud workflows delete wf-l2comm-gke-job \
+  --project=gcp-prod-edp-edge-509423 --location=asia-northeast3
+
+# API 도 함께 비활성화할 수 있습니다 (다른 용도로 쓰지 않는 경우에만)
+gcloud services disable workflows.googleapis.com workflowexecutions.googleapis.com \
+  cloudscheduler.googleapis.com --project=gcp-prod-edp-edge-509423
+```
+
+정기 실행이 필요했다면 VM 의 `crontab` 으로 대체합니다.
+
+```cron
+0 9 * * * DRY_RUN=0 /ssw/dlk/run-gke.sh $(date +\%Y\%m\%d) $(date +\%Y\%m\%d) \
+  $(date +\%Y\%m\%d) $(date +\%H\%M\%S) 0 4 16 /mnt/l2comm/python python bq_sample.py \
+  >> /var/log/l2comm-batch.log 2>&1
+```
+
 ## 2. L2Comm 대비 변경점 (Network 설계, L2Comm02에서 계승)
 
 | 항목 | 기존 L2Comm | L2Comm03 최종 |
@@ -76,7 +100,7 @@ done
 | Service CIDR | Subnet Secondary | GKE Managed / 별도 CIDR 미설정 |
 | Control Plane | `10.254.5.0/28` | `10.254.5.0/28` 유지 |
 | Image Build | Git 변경 시 Trigger | 동일, Batch 실행과 분리 |
-| Runtime | Scheduler -> Workflow -> GKE Job | 동일 |
+| Runtime | Scheduler -> Workflow -> GKE Job | run-gke.sh -> client_gke -> GKE Job |
 
 ## 3. 현재 상태
 
@@ -98,8 +122,8 @@ done
 7. ./gcloud/20-source-connection.sh
 8. ./gcloud/30-platform.sh
    - GKE Autopilot 신규 생성
-9. ./gcloud/40-scheduler.sh
-10. ./gcloud/99-verify.sh (GKE Job / BigQuery 결과 확인)
+9. ./gcloud/99-verify.sh
+10. VPC 내부 VM 에서 ssw/dlk/run-gke.sh 실행 (GKE Job / BigQuery 결과 확인)
 ```
 
 ## 4. Terraform 에서 이관하는 경우

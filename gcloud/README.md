@@ -2,8 +2,11 @@
 
 `Gcp_Managed_GKE_L2Comm02`의 `terraform/00-bootstrap`, `terraform/10-network`,
 `terraform/30-infra-manager`를 gcloud CLI로 1:1 전환한 스크립트입니다.
-`20-source-connection`, `40-scheduler`는 L2Comm02에서도 gcloud 기반이었고,
-여기서는 멱등성(재실행 안전성)만 보완했습니다.
+`20-source-connection`은 L2Comm02에서도 gcloud 기반이었고, 멱등성만 보완했습니다.
+
+**L2Comm02와 달리 Workflows / Cloud Scheduler를 사용하지 않습니다.**
+배치 실행은 `ssw/dlk/run-gke.sh` -> `client_gke`가 GKE API로 Job을 직접 생성하는
+경로로 바뀌었고, 그에 따라 `40-scheduler.sh`와 `workflow.yaml.tmpl`은 삭제되었습니다.
 
 ---
 
@@ -15,11 +18,9 @@
 | `00-bootstrap.sh` | `terraform/00-bootstrap` | API 활성화 / SA 생성 / 프로젝트 IAM |
 | `10-network.sh` | `terraform/10-network` | Shared VPC 연결 / Subnet / Subnet IAM |
 | `20-source-connection.sh` | `20-source-connection/README.md` | Cloud Build GitHub Repository 연결 |
-| `30-platform.sh` | `terraform/30-infra-manager` | AR / SA / Trigger / GKE Autopilot / Workflow |
-| `40-scheduler.sh` | `40-scheduler/README.md` | Cloud Scheduler (create or update) |
+| `30-platform.sh` | `terraform/30-infra-manager` | AR / SA / Trigger / GKE Autopilot / Namespace / KSA |
 | `90-teardown.sh` | `terraform destroy` | 생성 역순 삭제 (대화형 확인) |
 | `99-verify.sh` | `terraform output` / `plan` | 생성 자원 상태 일괄 점검 |
-| `workflow.yaml.tmpl` | `workflow.yaml.tftpl` | Workflows 정의. `templatefile()` 대신 `sed` 렌더링 |
 
 ---
 
@@ -33,7 +34,6 @@ vi gcloud/00-env.sh          # 프로젝트 ID / CIDR / SA 값 확인
 ./gcloud/10-network.sh       # CIDR 중복 확인 프롬프트 있음
 ./gcloud/20-source-connection.sh
 ./gcloud/30-platform.sh      # GKE 생성 15~25분
-./gcloud/40-scheduler.sh
 ./gcloud/99-verify.sh
 ```
 
@@ -63,13 +63,18 @@ sa-l2comm-runtime         ──┘
 | 주체 | 생성 위치 | 용도 |
 |---|---|---|
 | `chomap@sonmap.net` | — (기존 계정) | 배포 주체. `00-bootstrap.sh` 가 Edge/Host/Data Role 부여 |
-| `sa-l2comm-gke` | `30-platform.sh` | Cloud Build / Workflows / Cloud Scheduler / GKE Runtime 전 구간 |
+| `sa-l2comm-gke` | `30-platform.sh` | Cloud Build / GKE Runtime (Pod Workload Identity) |
 
-`sa-l2comm-gke` 는 기존 3개 SA Role 의 합집합(`artifactregistry.writer`,
-`logging.logWriter`, `storage.objectViewer`, `container.developer`,
-`workflows.invoker`, `bigquery.jobUser`, `compute.viewer`, Dataset `bigquery.dataEditor`)
-을 갖습니다. 배포 주체에는 이 SA 에 대한 `roles/iam.serviceAccountUser`(actAs)가
-필요하며 `30-platform.sh` 가 자동 부여합니다.
+`sa-l2comm-gke` 는 Build + Runtime Role 을 갖습니다: `artifactregistry.writer`,
+`logging.logWriter`, `storage.objectViewer`, `bigquery.jobUser`, `compute.viewer`,
+Dataset `bigquery.dataEditor`.
+
+Workflows 를 쓰지 않으므로 `workflows.invoker` 는 제거했고, Job 생성 권한
+(`container.developer`)은 SA 가 아니라 **run-gke.sh 를 실행하는 주체**
+(`chomap@sonmap.net` 및 VM 기본 SA)에 부여합니다.
+
+배포 주체에는 이 SA 에 대한 `roles/iam.serviceAccountUser`(actAs)가 필요하며
+`30-platform.sh` 가 자동 부여합니다.
 
 > Build 주체와 Runtime 주체가 동일 SA 가 되므로 최소권한 분리는 약해집니다.
 > 운영 전환 시 분리가 필요하면 `00-env.sh` 의 `SA_GKE` 를 용도별로 되돌립니다.
@@ -111,7 +116,7 @@ sa-l2comm-runtime         ──┘
 | `google_cloudbuild_trigger` (2nd-gen) | `gcloud builds triggers create github --repository=projects/../connections/../repositories/.. --branch-pattern` |
 | `google_container_cluster` (Autopilot) | `gcloud container clusters create-auto` (§4 참고) |
 | `google_service_account_iam_member` (WI) | `add-iam-policy-binding --member="serviceAccount:PROJECT.svc.id.goog[ns/ksa]"` |
-| `google_workflows_workflow` + `templatefile()` | `sed` 렌더링 + `gcloud workflows deploy --source=` (생성/갱신 겸용이라 멱등) |
+| `google_workflows_workflow` + `templatefile()` | **제거.** Workflows 미사용 — `ssw/dlk/client_gke` 가 `kubectl apply` 로 Job 생성 |
 
 ---
 
@@ -149,17 +154,26 @@ Terraform은 state로 "이미 있음"을 판별하지만 gcloud는 `ALREADY_EXIS
 
 ```
 services enable → SA 생성 → IAM 부여 → Shared VPC 연결
-  → Subnet 생성 → Subnet IAM → Cluster 생성 → WI 바인딩 → Workflow → Scheduler
+  → Subnet 생성 → Subnet IAM → Cluster 생성 → WI 바인딩 → Namespace/KSA
 ```
 
 특히 **Subnet IAM(`compute.networkUser`)이 Cluster 생성보다 먼저**여야 하고,
 `container.hostServiceAgentUser`가 없으면 Autopilot 생성이 실패합니다.
 
-### 5-4. `templatefile()` 대체
-`workflow.yaml.tftpl`은 Terraform 보간 `${var}`와 Workflows 표현식 `$${expr}`이
-섞여 있어 단순 치환으로는 깨집니다. `workflow.yaml.tmpl`은 Terraform 변수만
-`@@VAR@@` 플레이스홀더로 바꾸고 `$${...}` → `${...}` 로 복원해 두었으므로
-`sed` 치환만으로 그대로 배포됩니다.
+### 5-4. Job 생성 경로 (Workflows 대체)
+`workflow.yaml.tftpl` / `workflow.yaml.tmpl` 은 삭제했습니다. Job 매니페스트는
+`ssw/dlk/client_gke` 가 런타임에 생성해 `kubectl apply` 합니다.
+
+```
+run-gke.sh (10개 파라미터)
+  -> client_gke  : PV/PVC/Job YAML 생성 -> kubectl apply
+  -> GKE Job     : batch/v1, backoffLimit 1, ttlSecondsAfterFinished 600
+  -> kubectl wait --for=condition=complete
+  -> 로그 출력 후 Job 정리
+```
+
+Private endpoint 클러스터이므로 **VPC 내부 VM 에서만 실행 가능**합니다.
+`DRY_RUN=1`(기본값)이면 매니페스트만 출력하고 apply 하지 않습니다.
 
 ### 5-5. 권한 경계
 `10-network.sh`는 Host 프로젝트를 변경하므로 실행 주체에 `compute.networkAdmin`,
