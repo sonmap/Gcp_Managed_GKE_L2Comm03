@@ -403,6 +403,11 @@ gcloud config set account cho@sonmap.net
 
 ## 7. Cloud Build 저장소 연결  (**배포 주체**)
 
+기존 `github-l2comm` Connection 에는 `Gcp_Managed_GKE_L2Comm` 과
+`Gcp_Managed_GKE_L2Comm02` 만 연결되어 있습니다. **Connection 은 재사용**하고
+그 아래에 `Gcp_Managed_GKE_L2Comm03` 저장소만 **추가**합니다.
+Connection 을 새로 만들 필요는 없습니다.
+
 ### 7-1. Connection 확인
 
 ```bash
@@ -413,11 +418,45 @@ gcloud builds connections list \
 
 기대: `github-l2comm` 이 `COMPLETE`.
 
-### 7-2. 실행
+현재 연결된 저장소 목록:
+
+```bash
+gcloud builds repositories list \
+  --connection=github-l2comm \
+  --project=gcp-prod-edp-edge-509423 --region=asia-northeast3 \
+  --format="table(name.basename(), remoteUri)"
+```
+
+이 시점에는 `L2Comm`, `L2Comm02` 두 개만 보입니다.
+
+### 7-2. GitHub App 접근 권한 확인 (선행 조건)
+
+Cloud Build GitHub App 이 **Only select repositories** 로 설치되어 있으면,
+GitHub 쪽에서 `Gcp_Managed_GKE_L2Comm03` 을 먼저 허용해야 7-3 이 성공합니다.
+
+브라우저에서 확인합니다.
+
+```text
+https://github.com/settings/installations
+  또는 조직 계정이면
+https://github.com/organizations/sonmap/settings/installations
+```
+
+`Google Cloud Build` → **Configure** → Repository access 에서
+`Gcp_Managed_GKE_L2Comm03` 이 포함되어 있는지 확인하고, 없으면 추가합니다.
+(`All repositories` 로 설정되어 있으면 이 단계는 불필요합니다.)
+
+> 이 단계를 건너뛰면 7-3 에서 저장소를 찾지 못하거나
+> `PERMISSION_DENIED` / `NOT_FOUND` 가 발생합니다.
+
+### 7-3. 저장소 추가 실행
 
 ```bash
 ./gcloud/20-source-connection.sh
 ```
+
+> 스크립트는 멱등입니다. 이미 연결되어 있으면 `SKIP (이미 연결됨)` 을 출력하고
+> 재생성하지 않습니다. 기존 `L2Comm` / `L2Comm02` 연결에도 영향을 주지 않습니다.
 
 ### 확인
 
@@ -428,7 +467,13 @@ gcloud builds repositories list \
   --format="table(name.basename(), remoteUri)"
 ```
 
-기대: `Gcp_Managed_GKE_L2Comm03` 이 목록에 있음.
+기대: 기존 2개에 더해 `Gcp_Managed_GKE_L2Comm03` 이 추가되어 **3개**가 보임.
+
+```text
+Gcp_Managed_GKE_L2Comm     https://github.com/sonmap/Gcp_Managed_GKE_L2Comm.git
+Gcp_Managed_GKE_L2Comm02   https://github.com/sonmap/Gcp_Managed_GKE_L2Comm02.git
+Gcp_Managed_GKE_L2Comm03   https://github.com/sonmap/Gcp_Managed_GKE_L2Comm03.git
+```
 
 ---
 
@@ -903,6 +948,7 @@ crontab -l
 | PVC `Pending` | NFS 미기동 / IP 불일치 / 방화벽 | 10-2, 10-3 확인. `--nfs-server <VM_IP>` 로 명시 지정 |
 | Job 생성 403 | 실행 주체 권한 | `container.developer` 확인 (8-3) |
 | `cloudbuild.connections.list denied` | 배포 주체에 `cloudbuild.connectionAdmin` 없음 | §6-2 로 점검 후 Owner 로 `00-bootstrap.sh` 재실행 |
+| 저장소 추가 시 `NOT_FOUND` / `PERMISSION_DENIED` | GitHub App 이 L2Comm03 에 접근 불가 | §7-2 에서 GitHub App Repository access 에 L2Comm03 추가 |
 | `ALREADY_EXISTS` 로 중단 | 멱등 처리 밖의 자원 | 메시지의 자원명을 확인하고 기존 것을 그대로 사용 |
 
 ### 디버깅 명령
