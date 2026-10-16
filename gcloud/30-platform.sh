@@ -175,6 +175,19 @@ fi
 #    - Shared VPC 의 network/subnetwork 를 full path 로 지정
 #    - Pod 2차 대역만 지정, Service 대역은 GKE managed
 #    - Private nodes + Private endpoint + master CIDR
+#
+#    --enable-private-endpoint 를 쓰면 --enable-master-authorized-networks 가
+#    반드시 함께 있어야 합니다(없으면 400 에러).
+#    다만 --no-enable-authorized-networks-on-private-endpoint 로 Private IP
+#    경로에는 CIDR 제한을 걸지 않습니다. 관리 VM 의 대역이 RFC1918 이 아닐 수
+#    있어 L2Comm02 와 동일하게 유지한 설정입니다.
+#    운영 전환 시 제한이 필요하면 아래를 추가하십시오.
+#      --master-authorized-networks=10.252.1.0/24,<관리 VM CIDR>
+#      --enable-authorized-networks-on-private-endpoint
+#
+#    Private nodes 이므로 공인 인터넷에서 컨테이너를 받아야 한다면 Cloud NAT 가
+#    필요합니다. 이 PoC 는 Artifact Registry(Private Google Access)만 사용하므로
+#    Subnet 의 private-ip-google-access(10-network.sh 에서 설정)로 충분합니다.
 ###############################################################################
 log "GKE Autopilot Cluster: ${CLUSTER_NAME}"
 if gcloud container clusters describe "${CLUSTER_NAME}" \
@@ -190,6 +203,7 @@ else
     --enable-private-nodes \
     --enable-private-endpoint \
     --master-ipv4-cidr="${CONTROL_PLANE_CIDR}" \
+    --enable-master-authorized-networks \
     --no-enable-authorized-networks-on-private-endpoint
 fi
 
