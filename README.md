@@ -149,7 +149,8 @@ gcloud config set account cho@sonmap.net
 `30-platform.sh` 의 GKE Autopilot 생성에 15~25분이 소요됩니다.
 각 스크립트는 멱등이므로 중간 실패 후 재실행해도 안전합니다.
 
-단계별 테스트 명령어와 확인 기준은 [`docs/RUNBOOK.md`](docs/RUNBOOK.md),
+Ubuntu VM에서 `git clone`부터 배치 실행까지 복사해 쓰는 전체 절차는
+[`docs/RUNBOOK.md`](docs/RUNBOOK.md),
 Terraform ↔ gcloud 매핑표는 [`gcloud/README.md`](gcloud/README.md) 를 참고하십시오.
 
 ---
