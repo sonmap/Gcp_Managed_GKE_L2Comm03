@@ -139,7 +139,7 @@ HCL 블록과 gcloud 플래그가 직관적으로 대응되지 않는 부분입�
 | Service secondary range 미지정 | `--services-secondary-range-name`을 **주지 않음** (GKE managed `34.118.224.0/20`) |
 | `private_cluster_config` 3개 필드 | `--enable-private-nodes --enable-private-endpoint --master-ipv4-cidr` |
 | `master_authorized_networks_config { private_endpoint_enforcement_enabled = false }` | `--no-enable-authorized-networks-on-private-endpoint` |
-| `workload_identity_config.workload_pool` | `--workload-pool` |
+| `workload_identity_config.workload_pool` | **플래그 없음.** `create-auto` 는 `--workload-pool` 을 받지 않습니다(Standard 전용). Autopilot 은 WI 가 항상 켜져 있고 pool 은 `<PROJECT_ID>.svc.id.goog` 로 고정 |
 | `deletion_protection = false` | gcloud에 해당 개념 없음 (삭제 시 `--quiet`) |
 | Shared VPC network/subnetwork | 반드시 **full resource path** 로 지정 (`projects/HOST/global/networks/...`) |
 

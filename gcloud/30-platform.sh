@@ -190,8 +190,23 @@ else
     --enable-private-nodes \
     --enable-private-endpoint \
     --master-ipv4-cidr="${CONTROL_PLANE_CIDR}" \
-    --no-enable-authorized-networks-on-private-endpoint \
-    --workload-pool="${EDGE_PROJECT}.svc.id.goog"
+    --no-enable-authorized-networks-on-private-endpoint
+fi
+
+# Autopilot 은 Workload Identity 가 항상 활성화되며 workload pool 은
+# <PROJECT_ID>.svc.id.goog 로 고정됩니다. create-auto 는 --workload-pool 플래그를
+# 받지 않으므로(Standard 전용) 지정하지 않고, 생성 후 값만 검증합니다.
+ACTUAL_POOL="$(gcloud container clusters describe "${CLUSTER_NAME}" \
+  --project="${EDGE_PROJECT}" --region="${REGION}" \
+  --format='value(workloadIdentityConfig.workloadPool)' 2>/dev/null)"
+
+if [[ "${ACTUAL_POOL}" == "${EDGE_PROJECT}.svc.id.goog" ]]; then
+  log "Workload Identity pool 확인: ${ACTUAL_POOL}"
+else
+  echo "ERROR: Workload Identity pool 이 예상과 다릅니다." >&2
+  echo "       기대: ${EDGE_PROJECT}.svc.id.goog" >&2
+  echo "       실제: ${ACTUAL_POOL:-<없음>}" >&2
+  exit 1
 fi
 
 ###############################################################################
