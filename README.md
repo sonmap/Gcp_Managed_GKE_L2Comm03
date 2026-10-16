@@ -134,6 +134,7 @@ gcloud config set account admin@sonmap.net
 ```bash
 gcloud config set account cho@sonmap.net
 
+./gcloud/05-check-permissions.sh  # 권한 사전 점검 (FAIL 시 1단계 재실행)
 ./gcloud/20-source-connection.sh  # Cloud Build GitHub Repository 연결
 ./gcloud/30-platform.sh           # AR / SA / Trigger / GKE Autopilot / Namespace / KSA
 ./gcloud/99-verify.sh             # 전체 상태 점검
@@ -163,6 +164,7 @@ gcloud/                     # 프로비저닝 스크립트 (L2Comm02의 terrafor
 ├─ 00-env.sh                # 공통 변수 + 멱등 헬퍼
 ├─ 00-bootstrap.sh
 ├─ 10-network.sh
+├─ 05-check-permissions.sh   # 배포 주체 권한 사전 점검
 ├─ 20-source-connection.sh
 ├─ 30-platform.sh
 ├─ 90-teardown.sh           # terraform destroy 대체

@@ -98,6 +98,8 @@ DEPLOYER_MEMBER="user:${ADMIN_USER}"
 
 bind_project "${EDGE_PROJECT}" "${DEPLOYER_MEMBER}" \
   roles/cloudbuild.builds.editor \
+  roles/cloudbuild.connectionAdmin \
+  roles/logging.viewer \
   roles/compute.viewer \
   roles/container.admin \
   roles/iam.serviceAccountAdmin \
@@ -120,6 +122,8 @@ bind_project "${DATA_PROJECT}" "${DEPLOYER_MEMBER}" \
 if [[ "${GRANT_VM_DEPLOYER:-false}" == "true" ]]; then
   bind_project "${EDGE_PROJECT}" "serviceAccount:${VM_SA}" \
     roles/cloudbuild.builds.editor \
+    roles/cloudbuild.connectionAdmin \
+    roles/logging.viewer \
     roles/compute.viewer \
     roles/container.admin \
     roles/iam.serviceAccountAdmin \

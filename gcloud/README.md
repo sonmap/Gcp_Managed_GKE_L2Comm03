@@ -17,6 +17,7 @@
 | `00-env.sh` | `*/variables.tf`, `*/terraform.tfvars.example` | 공통 변수 + 멱등 헬퍼. 모든 스크립트가 `source` |
 | `00-bootstrap.sh` | `terraform/00-bootstrap` | API 활성화 / 프로젝트 IAM **(Owner 실행)** |
 | `10-network.sh` | `terraform/10-network` | Shared VPC 연결 / Subnet / Subnet IAM **(Owner 실행)** |
+| `05-check-permissions.sh` | — (신규) | 배포 주체 권한 사전 점검. `test-iam-permissions` 로 누락 Role 을 미리 식별 |
 | `20-source-connection.sh` | `20-source-connection/README.md` | Cloud Build GitHub Repository 연결 |
 | `30-platform.sh` | `terraform/30-infra-manager` | AR / SA / Trigger / GKE Autopilot / Namespace / KSA |
 | `90-teardown.sh` | `terraform destroy` | 생성 역순 삭제 (대화형 확인) |
@@ -37,6 +38,7 @@ gcloud config set account admin@sonmap.net
 
 # --- 배포 주체 (cho@sonmap.net) ---
 gcloud config set account cho@sonmap.net
+./gcloud/05-check-permissions.sh   # 권한 사전 점검
 ./gcloud/20-source-connection.sh
 ./gcloud/30-platform.sh      # GKE 생성 15~25분
 ./gcloud/99-verify.sh
