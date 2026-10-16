@@ -76,9 +76,10 @@ check_project "${AR_PROJECT}" "roles/serviceusage.serviceUsageAdmin" \
 
 echo
 echo "[Data] ${DATA_PROJECT}"
-check_project "${DATA_PROJECT}" "roles/bigquery.admin (30/11 단계)" \
+check_project "${DATA_PROJECT}" "roles/bigquery.admin (30/12 단계, dataset ACL 수정 포함)" \
   bigquery.datasets.get \
   bigquery.datasets.update \
+  bigquery.datasets.getIamPolicy \
   bigquery.jobs.create
 
 ###############################################################################

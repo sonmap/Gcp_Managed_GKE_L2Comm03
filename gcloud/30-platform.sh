@@ -63,12 +63,66 @@ bind_project "${EDGE_PROJECT}" "serviceAccount:${VM_SA}" roles/container.develop
 bind_sa "${SA_GKE}" "user:${ADMIN_USER}" roles/iam.serviceAccountUser
 
 # BigQuery Dataset IAM - gcloud 에는 dataset 레벨 명령이 없으므로 bq CLI 사용
+#
+# 2가지 방식을 순서대로 시도합니다.
+#   1) bq add-iam-policy-binding --dataset  (신식. 조직에 따라 allowlist 필요)
+#   2) dataset ACL 직접 수정                (bq show -> JSON 편집 -> bq update)
+# 2)의 WRITER 는 roles/bigquery.dataEditor 와 동등합니다.
 log "BigQuery dataset IAM: ${DATA_PROJECT}:${TARGET_DATASET}"
-bq --project_id="${DATA_PROJECT}" add-iam-policy-binding \
-  --dataset=true \
-  --member="serviceAccount:${SA_GKE}" \
-  --role="roles/bigquery.dataEditor" \
-  "${DATA_PROJECT}:${TARGET_DATASET}"
+
+bq_dataset_bind_iam() {
+  bq --project_id="${DATA_PROJECT}" add-iam-policy-binding \
+    --dataset=true \
+    --member="serviceAccount:${SA_GKE}" \
+    --role="roles/bigquery.dataEditor" \
+    "${DATA_PROJECT}:${TARGET_DATASET}" 2>&1
+}
+
+bq_dataset_bind_acl() {
+  local tmp="${TMPDIR:-/tmp}/l2comm-dataset-${TARGET_DATASET}.json"
+
+  bq --project_id="${DATA_PROJECT}" show --format=prettyjson \
+    "${DATA_PROJECT}:${TARGET_DATASET}" > "${tmp}"
+
+  python3 -I - "${tmp}" "${SA_GKE}" <<'PY'
+import json, sys
+path, sa = sys.argv[1], sys.argv[2]
+with open(path) as f:
+    ds = json.load(f)
+
+access = ds.setdefault("access", [])
+for entry in access:
+    if entry.get("userByEmail") == sa and entry.get("role") in ("WRITER", "roles/bigquery.dataEditor"):
+        print("ALREADY_PRESENT")
+        break
+else:
+    access.append({"role": "WRITER", "userByEmail": sa})
+    with open(path, "w") as f:
+        json.dump(ds, f)
+    print("ADDED")
+PY
+
+  bq --project_id="${DATA_PROJECT}" update --source="${tmp}" \
+    "${DATA_PROJECT}:${TARGET_DATASET}"
+  rm -f "${tmp}"
+}
+
+set +e
+BQ_OUT="$(bq_dataset_bind_iam)"; BQ_RC=$?
+set -e
+
+if [[ ${BQ_RC} -ne 0 ]]; then
+  if grep -qi "allowlist\|not supported\|Unknown argument\|dataset" <<<"${BQ_OUT}"; then
+    log "add-iam-policy-binding 사용 불가 -> dataset ACL 방식으로 전환"
+    log "  (사유: $(head -1 <<<"${BQ_OUT}"))"
+    bq_dataset_bind_acl
+  else
+    printf '%s\n' "${BQ_OUT}" >&2
+    exit "${BQ_RC}"
+  fi
+else
+  printf '%s\n' "${BQ_OUT}"
+fi
 
 # Artifact Registry 저장소 레벨 IAM  (google_artifact_registry_repository_iam_member)
 #

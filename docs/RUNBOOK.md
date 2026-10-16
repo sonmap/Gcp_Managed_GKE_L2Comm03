@@ -549,10 +549,20 @@ gcloud projects get-iam-policy gcp-prod-edp-edge-509423 \
 ### 8-4. BigQuery Dataset 권한
 
 ```bash
-bq show --format=prettyjson pjt-c-admin:dlk_sample | grep -B2 -A2 sa-l2comm-gke
+bq show --format=prettyjson pjt-c-admin:dlk_sample \
+  | python3 -c "import json,sys; [print(a) for a in json.load(sys.stdin)['access'] if 'l2comm' in str(a)]"
 ```
 
-기대: 통합 SA 가 `WRITER` 또는 `roles/bigquery.dataEditor` 로 존재.
+기대:
+
+```text
+{'role': 'WRITER', 'userByEmail': 'sa-l2comm-gke@gcp-prod-edp-edge-509423.iam.gserviceaccount.com'}
+```
+
+> 조직에 따라 `bq add-iam-policy-binding --dataset` 이 allowlist 기능이라
+> 거부될 수 있습니다. 그 경우 스크립트가 자동으로 dataset ACL 방식으로
+> 전환해 `WRITER` 로 부여합니다. `WRITER` 는 `roles/bigquery.dataEditor`
+> 와 동등하므로 둘 중 어느 형태로 보여도 정상입니다.
 
 ### 8-5. Workload Identity 바인딩
 
@@ -949,6 +959,7 @@ crontab -l
 | Job 생성 403 | 실행 주체 권한 | `container.developer` 확인 (8-3) |
 | `cloudbuild.connections.list denied` | 배포 주체에 `cloudbuild.connectionAdmin` 없음 | §6-2 로 점검 후 Owner 로 `00-bootstrap.sh` 재실행 |
 | 저장소 추가 시 `NOT_FOUND` / `PERMISSION_DENIED` | GitHub App 이 L2Comm03 에 접근 불가 | §7-2 에서 GitHub App Repository access 에 L2Comm03 추가 |
+| `BigQuery error ... This feature requires allowlisting` | `bq add-iam-policy-binding --dataset` 미지원 조직 | 자동으로 dataset ACL 방식으로 폴백됨. 8-4 로 `WRITER` 부여 확인 |
 | `ALREADY_EXISTS` 로 중단 | 멱등 처리 밖의 자원 | 메시지의 자원명을 확인하고 기존 것을 그대로 사용 |
 
 ### 디버깅 명령
