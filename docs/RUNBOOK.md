@@ -676,10 +676,38 @@ cd ~/Gcp_Managed_GKE_L2Comm03
 bash ssw/dlk/install-vm.sh
 ```
 
+L2Comm02 PoC 를 같은 VM 에서 했다면 `/ssw/dlk` 가 이미 02 체크아웃을
+가리키고 있어 아래 오류가 납니다.
+
+```text
+ERROR: /ssw/dlk already exists and is not the expected symlink.
+```
+
+먼저 무엇을 가리키는지 확인합니다.
+
+```bash
+ls -ld /ssw/dlk
+readlink -f /ssw/dlk
+```
+
+다른 체크아웃을 가리키는 **심볼릭 링크**이면 03 으로 다시 겁니다.
+
+```bash
+REPOINT=true bash ssw/dlk/install-vm.sh
+```
+
+심볼릭 링크가 아니라 **실제 디렉터리**이면 백업 후 재실행합니다.
+
+```bash
+sudo mv /ssw/dlk /ssw/dlk.bak
+bash ssw/dlk/install-vm.sh
+```
+
 ### 확인
 
 ```bash
 ls -l /ssw/dlk
+readlink -f /ssw/dlk
 ```
 
 기대: `~/Gcp_Managed_GKE_L2Comm03/ssw/dlk` 를 가리키는 심볼릭 링크.
@@ -974,6 +1002,7 @@ crontab -l
 | `BigQuery error ... This feature requires allowlisting` | `bq add-iam-policy-binding --dataset` 미지원 조직 | 자동으로 dataset ACL 방식으로 폴백됨. 8-4 로 `WRITER` 부여 확인 |
 | 빌드 로그에 `REPO_FULL_NAME: ...L2Comm02` | L2Comm02 트리거를 재사용함 | `trg-l2comm03-python-image` 를 사용. 최신 소스로 `git pull` 후 `30-platform.sh` 재실행 |
 | `triggers create github: unrecognized arguments: <트리거명>` | 트리거 이름을 위치 인자로 전달 | 최신 소스로 `git pull`. `--name=` 플래그를 사용하도록 수정됨 |
+| `/ssw/dlk already exists and is not the expected symlink` | L2Comm02 체크아웃을 가리키는 링크가 남음 | `readlink -f /ssw/dlk` 확인 후 `REPOINT=true bash ssw/dlk/install-vm.sh` (실제 디렉터리면 백업 후 재실행) |
 | `create-auto: unrecognized arguments: --workload-pool` | Autopilot 은 해당 플래그 미지원 | 최신 소스로 `git pull`. Autopilot 은 WI 가 기본 활성화이며 pool 은 자동 설정됨 |
 | `enable_master_authorized_networks should be enabled if private endpoint is enabled` | 플래그 조합 누락 | 최신 소스로 `git pull`. `--enable-master-authorized-networks` 가 함께 지정됨 |
 | 생성 중 Cloud NAT 안내 메시지 | Private nodes 안내(오류 아님) | AR 은 Private Google Access 로 접근하므로 무시 가능. 공인 인터넷 egress 가 필요하면 Cloud NAT 구성 |
