@@ -163,6 +163,7 @@ gcloud config set account cho@sonmap.net
 `30-platform.sh` 의 GKE Autopilot 생성에 15~25분이 소요됩니다.
 각 스크립트는 멱등이므로 중간 실패 후 재실행해도 안전합니다.
 
+저장소 전체 구조와 파일별 실행 위치·순서는 [`docs/STRUCTURE.md`](docs/STRUCTURE.md),
 Ubuntu VM에서 `git clone`부터 배치 실행까지 복사해 쓰는 전체 절차는
 [`docs/RUNBOOK.md`](docs/RUNBOOK.md),
 Terraform ↔ gcloud 매핑표는 [`gcloud/README.md`](gcloud/README.md) 를 참고하십시오.
@@ -187,7 +188,7 @@ gcloud/                     # 프로비저닝 스크립트 (L2Comm02의 terrafor
 app/                        # Python batch + Dockerfile
 cloudbuild/cloudbuild.yaml  # Image build 정의
 helm/l2comm-batch/          # Helm chart
-docs/                       # DESIGN.md / MIGRATION.md
+docs/                       # STRUCTURE.md / RUNBOOK.md / DESIGN.md / MIGRATION.md
 k8s/debug-pod.yaml          # 배치와 동일 환경의 디버그 Pod (접속용)
 ssw/dlk/                    # VM run-gke.sh / client_gke / debug-gke.sh / NFS PoC
 mnt/                        # NFS PV 마운트용 Python 샘플
