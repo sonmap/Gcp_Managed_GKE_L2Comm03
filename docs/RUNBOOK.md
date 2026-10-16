@@ -770,12 +770,23 @@ gcloud config set account cho@sonmap.net
 4. 노드 네트워크 태그를 자동 조회해 `fw-l2comm-master-to-node` 생성
 5. 결과 출력
 
-다른 VM 이 NFS 서버이면 지정해 실행합니다.
+다른 VM 이 NFS 서버이거나, 자동 인식한 프로젝트가 틀려
+`was not found` 가 나오면 직접 지정해 재실행합니다.
 
 ```bash
+# VM 이 어느 프로젝트/존에 있는지 확인
+gcloud compute instances list --filter="name:infra-son01" \
+  --format="table(name, zone.basename(), networkInterfaces[0].networkIP)"
+
 NFS_VM_NAME=<VM> NFS_VM_ZONE=<ZONE> NFS_VM_PROJECT=<PRJ> \
   ./gcloud/11-firewall.sh
 ```
+
+> 태그 부여에 실패해도 스크립트는 중단되지 않고 Control Plane 규칙 생성까지
+> 진행합니다. 기존에 **target tag 없는** 2049 허용 규칙
+> (`allow-l2comm-gke-node-to-nfs` 등)이 이미 있다면 네트워크 내 모든 VM 에
+> 적용되므로 태그가 없어도 NFS 는 동작합니다.
+> `SKIP_NFS_TAG=true` 로 태그 단계를 건너뛸 수 있습니다.
 
 ### 확인
 

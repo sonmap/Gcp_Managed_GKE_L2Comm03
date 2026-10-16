@@ -62,7 +62,8 @@ fi
 ###############################################################################
 if [[ "${SKIP_NFS_TAG:-false}" != "true" ]]; then
   # 지정이 없으면 이 스크립트를 실행 중인 VM 을 메타데이터로 자동 인식
-  MD="http://metadata.google.internal/computeMetadata/v1/instance"
+  MD_ROOT="http://metadata.google.internal/computeMetadata/v1"
+  MD="${MD_ROOT}/instance"
   MD_HDR="Metadata-Flavor: Google"
 
   if [[ -z "${NFS_VM_NAME:-}" ]]; then
@@ -72,23 +73,37 @@ if [[ "${SKIP_NFS_TAG:-false}" != "true" ]]; then
     NFS_VM_ZONE="$(curl -s -H "${MD_HDR}" "${MD}/zone" 2>/dev/null | awk -F/ '{print $NF}' || true)"
   fi
   if [[ -z "${NFS_VM_PROJECT:-}" ]]; then
-    NFS_VM_PROJECT="$(curl -s -H "${MD_HDR}" "../project/project-id" 2>/dev/null || true)"
-    [[ -z "${NFS_VM_PROJECT}" ]] && NFS_VM_PROJECT="$(gcloud config get-value project 2>/dev/null)"
+    # 메타데이터의 project-id 는 VM 이 실제로 속한 프로젝트입니다.
+    # (gcloud config 의 프로젝트와 다를 수 있으므로 fallback 으로 쓰지 않습니다)
+    NFS_VM_PROJECT="$(curl -s -H "${MD_HDR}" "${MD_ROOT}/project/project-id" 2>/dev/null || true)"
   fi
 
   if [[ -n "${NFS_VM_NAME}" && -n "${NFS_VM_ZONE}" && -n "${NFS_VM_PROJECT}" ]]; then
     log "NFS VM 태그: ${NFS_VM_PROJECT}/${NFS_VM_ZONE}/${NFS_VM_NAME} -> ${NFS_TAG}"
-    CUR_TAGS="$(gcloud compute instances describe "${NFS_VM_NAME}" \
-      --zone="${NFS_VM_ZONE}" --project="${NFS_VM_PROJECT}" \
-      --format='value(tags.items.list())' 2>/dev/null || true)"
 
-    if grep -q "${NFS_TAG}" <<<"${CUR_TAGS}"; then
-      log "SKIP (이미 태그 보유): ${NFS_TAG}"
+    # VM 이 보이지 않으면(프로젝트 오인/권한 부족) 전체 실패시키지 않고
+    # 안내만 남긴 뒤 Control Plane 규칙 생성으로 진행합니다.
+    if ! gcloud compute instances describe "${NFS_VM_NAME}" \
+           --zone="${NFS_VM_ZONE}" --project="${NFS_VM_PROJECT}" \
+           >/dev/null 2>&1; then
+      log "WARN: VM 을 찾지 못했습니다: ${NFS_VM_PROJECT}/${NFS_VM_ZONE}/${NFS_VM_NAME}"
+      log "      VM 이 속한 프로젝트를 확인한 뒤 아래처럼 지정해 재실행하십시오."
+      log "        gcloud compute instances list --filter=\"name:${NFS_VM_NAME}\" \\"
+      log "          --format='table(name, zone.basename(), networkInterfaces[0].networkIP)'"
+      log "        NFS_VM_PROJECT=<PRJ> ./gcloud/11-firewall.sh"
     else
-      # add-tags 는 기존 태그를 보존합니다.
-      gcloud compute instances add-tags "${NFS_VM_NAME}" \
+      CUR_TAGS="$(gcloud compute instances describe "${NFS_VM_NAME}" \
         --zone="${NFS_VM_ZONE}" --project="${NFS_VM_PROJECT}" \
-        --tags="${NFS_TAG}"
+        --format='value(tags.items.list())' 2>/dev/null || true)"
+
+      if grep -q "${NFS_TAG}" <<<"${CUR_TAGS}"; then
+        log "SKIP (이미 태그 보유): ${NFS_TAG}"
+      else
+        # add-tags 는 기존 태그를 보존합니다.
+        gcloud compute instances add-tags "${NFS_VM_NAME}" \
+          --zone="${NFS_VM_ZONE}" --project="${NFS_VM_PROJECT}" \
+          --tags="${NFS_TAG}"
+      fi
     fi
   else
     log "SKIP: NFS VM 을 식별하지 못했습니다(메타데이터 없음)."
