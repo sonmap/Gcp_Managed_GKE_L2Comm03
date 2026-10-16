@@ -105,12 +105,12 @@ bind_project "${EDGE_PROJECT}" "${DEPLOYER_MEMBER}" \
   roles/resourcemanager.projectIamAdmin \
   roles/serviceusage.serviceUsageAdmin
 
-# artifactregistry.admin 은 AR 이 있는 Host 프로젝트에 부여합니다.
+# Host 프로젝트에는 Artifact Registry 운영에 필요한 최소 권한만 부여합니다.
+# 네트워크 관리(compute.networkAdmin / securityAdmin)는 Owner 영역이므로
+# 배포 주체에게 주지 않습니다. GKE 생성에 필요한 Subnet 접근은
+# 10-network.sh 가 해당 Subnet 한정으로 compute.networkUser 를 부여합니다.
 bind_project "${HOST_PROJECT}" "${DEPLOYER_MEMBER}" \
   roles/artifactregistry.admin \
-  roles/compute.networkAdmin \
-  roles/compute.securityAdmin \
-  roles/resourcemanager.projectIamAdmin \
   roles/serviceusage.serviceUsageAdmin
 
 bind_project "${DATA_PROJECT}" "${DEPLOYER_MEMBER}" \
@@ -127,9 +127,7 @@ if [[ "${GRANT_VM_DEPLOYER:-false}" == "true" ]]; then
     roles/resourcemanager.projectIamAdmin \
     roles/serviceusage.serviceUsageAdmin
   bind_project "${HOST_PROJECT}" "serviceAccount:${VM_SA}" \
-    roles/artifactregistry.admin \
-    roles/compute.networkAdmin \
-    roles/compute.securityAdmin
+    roles/artifactregistry.admin
   bind_project "${DATA_PROJECT}" "serviceAccount:${VM_SA}" roles/bigquery.admin
 fi
 
@@ -168,10 +166,14 @@ log "00-bootstrap 완료"
 cat <<EOF
 
 === 다음 단계 ===
-Owner 계정의 역할은 여기까지입니다. 배포 주체로 전환한 뒤 진행하십시오.
+네트워크 구성(10-network.sh)도 관리 영역이므로 Owner 계정으로 이어서 실행합니다.
+
+  ./gcloud/10-network.sh
+
+그 이후(20 단계부터) 배포 주체로 전환합니다.
 
   gcloud config set account ${ADMIN_USER}
-  ./gcloud/10-network.sh
+  ./gcloud/20-source-connection.sh
 
 부여된 Role 확인:
   gcloud projects get-iam-policy ${EDGE_PROJECT} \\

@@ -12,8 +12,8 @@ VPC 내부 Ubuntu VM 한 대에서 `git clone` 부터 배치 실행·결과 확�
 
 | 계정 | 용도 | 사용 단계 |
 |---|---|---|
-| `admin@sonmap.net` | Owner. **권한(IAM) 부여 전용** | §4 만 |
-| `cho@sonmap.net` | 배포·운영 주체 | §5 이후 전부 |
+| `admin@sonmap.net` | Owner. **권한(IAM) 부여 + 네트워크 관리** | §4, §5 |
+| `cho@sonmap.net` | 배포·운영 주체 | §6 이후 전부 |
 
 각 스크립트는 시작 시 실행 계정을 검증하고, 틀리면 전환 방법을 안내하며 중단합니다.
 우회가 필요하면 `SKIP_ACCOUNT_CHECK=1` 을 앞에 붙입니다.
@@ -99,7 +99,7 @@ source ~/.bashrc
 
 ---
 
-## 4. Owner 계정으로 권한 부여
+## 4. Owner 계정으로 권한 부여  (**Owner 계정**)
 
 ### 4-1. Owner 로그인
 
@@ -237,14 +237,21 @@ gcloud projects get-iam-policy gcp-prod-edp-hub-vpchost \
   --format="value(bindings.role)"
 ```
 
-기대 (5개): `artifactregistry.admin`, `compute.networkAdmin`,
-`compute.securityAdmin`, `resourcemanager.projectIamAdmin`,
-`serviceusage.serviceUsageAdmin`
+기대 (2개): `artifactregistry.admin`, `serviceusage.serviceUsageAdmin`
 
-### 4-6. 조직 수준 권한 (Owner 만 가능)
+> 네트워크 관리(`compute.networkAdmin` / `securityAdmin`)는 Owner 영역이므로
+> 배포 주체에게 부여하지 않습니다. GKE 생성에 필요한 Subnet 접근은
+> §5-6 에서 해당 Subnet 한정으로 `compute.networkUser` 가 부여됩니다.
+
+### 4-6. 조직 수준 권한 확인 (Shared VPC 연결용)
 
 Shared VPC 서비스 프로젝트 연결에는 조직 수준 권한이 필요하며,
 이는 프로젝트 IAM 이 아니라 스크립트가 부여하지 못합니다.
+
+Owner 계정이 조직 수준 `compute.xpnAdmin` 을 이미 보유하고 있다면 추가 작업이
+없습니다. §5 는 Owner 로 실행하므로 배포 주체에게 이 권한을 위임할 필요가 없습니다.
+
+확인:
 
 ```bash
 gcloud organizations list
@@ -253,26 +260,30 @@ gcloud organizations list
 ```bash
 ORG_ID=<위에서 확인한 ID>
 
-gcloud organizations add-iam-policy-binding "${ORG_ID}" \
-  --member="user:cho@sonmap.net" \
-  --role="roles/compute.xpnAdmin"
+gcloud organizations get-iam-policy "${ORG_ID}" \
+  --flatten="bindings[].members" \
+  --filter="bindings.members:admin@sonmap.net AND bindings.role:roles/compute.xpnAdmin" \
+  --format="value(bindings.role)"
 ```
 
-> 이미 Shared VPC 연결이 되어 있다면 생략 가능합니다. §5 에서 연결 여부를
-> 먼저 확인하고, 이미 연결되어 있으면 이 단계는 넘어가도 됩니다.
+기대: `roles/compute.xpnAdmin` 출력 (또는 Owner 가 조직 Owner 여서 포함).
+출력이 없고 Shared VPC 연결도 아직이면, 조직 관리자가 Owner 계정에
+`roles/compute.xpnAdmin` 을 부여해야 §5-4 가 성공합니다.
 
 ---
 
-## 5. 배포 주체로 전환 후 네트워크 구성
+## 5. 네트워크 구성  (**Owner 계정 계속**)
 
-### 5-1. 계정 전환
+Shared VPC 연결, Host 프로젝트 Subnet 생성, Subnet/Project 레벨 IAM 부여는
+모두 네트워크 관리 영역이므로 Owner 계정으로 수행합니다.
+
+### 5-1. 계정 확인
 
 ```bash
-gcloud config set account cho@sonmap.net
 gcloud config get-value account
 ```
 
-기대: `cho@sonmap.net`
+기대: `admin@sonmap.net` (§4 에서 이미 전환된 상태)
 
 ### 5-2. CIDR 중복 사전 확인
 
@@ -300,7 +311,7 @@ gcloud compute shared-vpc associated-projects list gcp-prod-edp-hub-vpchost \
 
 출력이 있으면 이미 연결된 상태입니다 (4-6 생략 가능).
 
-### 5-4. 10-network 실행
+### 5-4. 10-network 실행 (Owner)
 
 ```bash
 cd ~/Gcp_Managed_GKE_L2Comm03
@@ -330,9 +341,40 @@ privateIpGoogleAccess: true
 
 Secondary Range 는 **Pod 1개만** 있어야 합니다 (Service Range 없음).
 
+### 5-6. Subnet 레벨 IAM 확인
+
+```bash
+gcloud compute networks subnets get-iam-policy subnet-prod-edp-l2comm-gke-an3 \
+  --project=gcp-prod-edp-hub-vpchost --region=asia-northeast3 \
+  --format="yaml(bindings)"
+```
+
+기대: `roles/compute.networkUser` 에 아래 4개.
+
+```text
+serviceAccount:service-<EDGE번호>@container-engine-robot.iam.gserviceaccount.com
+serviceAccount:<EDGE번호>@cloudservices.gserviceaccount.com
+user:cho@sonmap.net
+serviceAccount:<VM_SA>
+```
+
+> 배포 주체에게 Host 프로젝트 전체 네트워크 권한을 주지 않고, 이 Subnet 에만
+> 한정해 부여합니다. 이것이 있어야 §7 에서 GKE 생성이 가능합니다.
+
 ---
 
-## 6. Cloud Build 저장소 연결
+## 6. Cloud Build 저장소 연결  (**배포 주체로 전환**)
+
+### 6-0. 계정 전환
+
+여기서부터 배포 주체 계정으로 전환합니다.
+
+```bash
+gcloud config set account cho@sonmap.net
+gcloud config get-value account
+```
+
+기대: `cho@sonmap.net`
 
 ### 6-1. Connection 확인
 
@@ -363,7 +405,7 @@ gcloud builds repositories list \
 
 ---
 
-## 7. 플랫폼 구성 (AR / SA / Trigger / GKE)
+## 7. 플랫폼 구성 (AR / SA / Trigger / GKE)  (**배포 주체**)
 
 ```bash
 ./gcloud/30-platform.sh
@@ -821,11 +863,12 @@ crontab -l
 
 | 증상 | 원인 | 조치 |
 |---|---|---|
-| 스크립트가 계정 오류로 중단 | 계정 분리 규칙 | `00-bootstrap.sh` 는 `admin@sonmap.net`, 나머지는 `cho@sonmap.net`. `gcloud config set account <계정>` |
+| 스크립트가 계정 오류로 중단 | 계정 분리 규칙 | `00-bootstrap.sh` / `10-network.sh` 는 `admin@sonmap.net`, `20`·`30`·`90` 은 `cho@sonmap.net`. `gcloud config set account <계정>` |
 | `gke-gcloud-auth-plugin` not found | 플러그인 미설치 | §3 재실행 후 `export USE_GKE_GCLOUD_AUTH_PLUGIN=True` |
 | `kubectl` 타임아웃 | VPC 외부이거나 라우팅 문제 | VM 이 `vpc-prod-edp-hub` 내부인지 확인, `--internal-ip` 로 재인증 (9-4) |
-| `PERMISSION_DENIED` (subnet 생성) | Host 프로젝트 권한 부족 | 4-5 확인 명령으로 Role 점검, 부족하면 Owner 로 `00-bootstrap.sh` 재실행 |
-| Shared VPC 연결 실패 | 조직 수준 권한 | 4-6 의 `compute.xpnAdmin` 부여 필요 (Owner 만 가능) |
+| `PERMISSION_DENIED` (subnet 생성) | Owner 아닌 계정으로 10-network 실행 | `gcloud config set account admin@sonmap.net` 후 재실행 |
+| GKE 생성 시 subnet 접근 거부 | 배포 주체의 Subnet networkUser 누락 | §5-6 확인. 없으면 Owner 로 `10-network.sh` 재실행 |
+| Shared VPC 연결 실패 | Owner 의 조직 수준 `compute.xpnAdmin` 없음 | §4-6 으로 확인. 조직 관리자가 Owner 계정에 부여해야 함 |
 | Cluster 생성 실패 | GKE Service Agent 권한 | `10-network.sh` 재실행 후 `container.hostServiceAgentUser` 확인 |
 | Build `denied: ...uploadArtifacts` | Build SA 의 AR writer 누락 | AR 이 Host 프로젝트이므로 **저장소 레벨** writer 확인 (7-1) |
 | Pod `ImagePullBackOff` | 크로스 프로젝트 AR 권한 | 저장소 레벨 reader 확인 (7-1), `AUTOPILOT_NODE_SA` 값 대조 |

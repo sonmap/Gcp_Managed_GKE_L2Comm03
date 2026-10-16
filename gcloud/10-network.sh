@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
 # terraform/10-network/main.tf 의 gcloud 등가 구현
 #
-# 실행 권한: Host project 의 compute.networkAdmin / compute.xpnAdmin 필요
-#            (Shared VPC 서비스 프로젝트 연결은 조직 수준 xpnAdmin 일 수 있음)
+# ** 이 스크립트는 Owner 계정(admin@sonmap.net)으로 실행합니다. **
+#
+# Shared VPC 연결, Host 프로젝트 Subnet 생성, Subnet/Project 레벨 IAM 부여는
+# 모두 네트워크 관리 영역이므로 Owner 가 수행합니다.
+# 조직 수준 compute.xpnAdmin 이 필요한 작업(Shared VPC 서비스 프로젝트 연결)도
+# 여기에 포함되므로 배포 주체 계정으로는 수행하지 않습니다.
+#
+#   gcloud config set account admin@sonmap.net
+#   ./gcloud/10-network.sh
+#   gcloud config set account cho@sonmap.net     # 이후 단계
 
 source "$(dirname "$0")/00-env.sh"
 
-# 자원 생성/운영 단계 -> 배포 주체로 실행 (Owner 아님)
-require_account "${ADMIN_USER}"
+# 네트워크 관리 영역 -> Owner 로 실행
+require_account "${OWNER_USER}"
 
 ###############################################################################
 # 0) 사전 확인 - CIDR 중복 검사 (README 8 항목)
@@ -75,15 +83,25 @@ fi
 ###############################################################################
 # 5) Subnet 레벨 IAM  (google_compute_subnetwork_iam_member)
 ###############################################################################
-for MEMBER in "${GKE_SERVICE_AGENT}" "${CLOUD_SERVICES_SA}"; do
-  log "Subnet IAM :: ${MEMBER} -> roles/compute.networkUser"
+subnet_bind() {  # subnet_bind <member>
+  log "Subnet IAM :: ${1} -> roles/compute.networkUser"
   gcloud compute networks subnets add-iam-policy-binding "${SUBNET_NAME}" \
     --project="${HOST_PROJECT}" \
     --region="${REGION}" \
-    --member="serviceAccount:${MEMBER}" \
+    --member="${1}" \
     --role=roles/compute.networkUser \
     --quiet >/dev/null
+}
+
+for MEMBER in "${GKE_SERVICE_AGENT}" "${CLOUD_SERVICES_SA}"; do
+  subnet_bind "serviceAccount:${MEMBER}"
 done
+
+# 배포 주체가 30-platform.sh 에서 이 Subnet 을 지정해 GKE 를 만들려면
+# Subnet 레벨 networkUser 가 필요합니다. Host 프로젝트 전체 권한을 주지 않고
+# 이 Subnet 에만 한정해 부여합니다.
+subnet_bind "user:${ADMIN_USER}"
+subnet_bind "serviceAccount:${VM_SA}"
 
 ###############################################################################
 # 6) Host project 레벨 GKE Service Agent 권한
@@ -102,3 +120,12 @@ gcloud compute networks subnets describe "${SUBNET_NAME}" \
   --format="yaml(name, ipCidrRange, secondaryIpRanges, privateIpGoogleAccess)"
 
 log "10-network 완료"
+
+cat <<EOF
+
+=== 다음 단계 ===
+네트워크 관리 영역은 여기까지입니다. 배포 주체로 전환한 뒤 진행하십시오.
+
+  gcloud config set account ${ADMIN_USER}
+  ./gcloud/20-source-connection.sh
+EOF

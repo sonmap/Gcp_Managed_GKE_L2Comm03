@@ -15,8 +15,8 @@
 | 파일 | L2Comm02 대응 | 내용 |
 |---|---|---|
 | `00-env.sh` | `*/variables.tf`, `*/terraform.tfvars.example` | 공통 변수 + 멱등 헬퍼. 모든 스크립트가 `source` |
-| `00-bootstrap.sh` | `terraform/00-bootstrap` | API 활성화 / SA 생성 / 프로젝트 IAM |
-| `10-network.sh` | `terraform/10-network` | Shared VPC 연결 / Subnet / Subnet IAM |
+| `00-bootstrap.sh` | `terraform/00-bootstrap` | API 활성화 / 프로젝트 IAM **(Owner 실행)** |
+| `10-network.sh` | `terraform/10-network` | Shared VPC 연결 / Subnet / Subnet IAM **(Owner 실행)** |
 | `20-source-connection.sh` | `20-source-connection/README.md` | Cloud Build GitHub Repository 연결 |
 | `30-platform.sh` | `terraform/30-infra-manager` | AR / SA / Trigger / GKE Autopilot / Namespace / KSA |
 | `90-teardown.sh` | `terraform destroy` | 생성 역순 삭제 (대화형 확인) |
@@ -30,8 +30,13 @@
 chmod +x gcloud/*.sh
 vi gcloud/00-env.sh          # 프로젝트 ID / CIDR / SA 값 확인
 
+# --- Owner (admin@sonmap.net) ---
+gcloud config set account admin@sonmap.net
 ./gcloud/00-bootstrap.sh
 ./gcloud/10-network.sh       # CIDR 중복 확인 프롬프트 있음
+
+# --- 배포 주체 (cho@sonmap.net) ---
+gcloud config set account cho@sonmap.net
 ./gcloud/20-source-connection.sh
 ./gcloud/30-platform.sh      # GKE 생성 15~25분
 ./gcloud/99-verify.sh
@@ -62,8 +67,8 @@ sa-l2comm-runtime         ──┘
 
 | 주체 | 생성 위치 | 용도 |
 |---|---|---|
-| `admin@sonmap.net` | — (Owner 계정) | **권한 부여 전용.** `00-bootstrap.sh` 만 이 계정으로 실행 |
-| `cho@sonmap.net` | — (기존 계정) | 배포 주체. `00-bootstrap.sh` 가 Edge/Host/Data Role 부여 |
+| `admin@sonmap.net` | — (Owner 계정) | **IAM 부여 + 네트워크 관리.** `00-bootstrap.sh` 와 `10-network.sh` 를 이 계정으로 실행 |
+| `cho@sonmap.net` | — (기존 계정) | 배포 주체. `00-bootstrap.sh` 가 Role 부여, `10-network.sh` 가 Subnet networkUser 부여 |
 | `sa-l2comm-gke` | `30-platform.sh` | Cloud Build / GKE Runtime (Pod Workload Identity) |
 
 `sa-l2comm-gke` 는 Build + Runtime Role 을 갖습니다: `artifactregistry.writer`,
