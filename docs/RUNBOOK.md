@@ -743,9 +743,15 @@ Pod 가 VM 의 NFS 를 마운트하므로 Node/Pod 대역에서 TCP 2049 허용�
 ```bash
 gcloud compute firewall-rules list \
   --project=gcp-prod-edp-hub-vpchost \
-  --filter="network:vpc-prod-edp-hub AND allowed.ports:2049" \
-  --format="table(name, sourceRanges.list(), targetTags.list())"
+  --filter="network:vpc-prod-edp-hub" \
+  --format="table(name, sourceRanges.list(), allowed[].map().firewall_rule().list(), targetTags.list())" \
+  | grep -E "NAME|2049"
 ```
+
+> `allowed.ports` 는 Compute API 의 서버측 필터가 지원하지 않습니다.
+> (`Invalid list filter expression`) 포트는 위처럼 `grep` 으로 거릅니다.
+
+출력이 없으면 2049 허용 규칙이 없는 것이므로 아래에서 생성합니다.
 
 규칙이 없으면 생성합니다 (VM 에 `l2comm-nfs` 태그를 붙인 뒤 사용).
 
@@ -1002,6 +1008,8 @@ crontab -l
 | `BigQuery error ... This feature requires allowlisting` | `bq add-iam-policy-binding --dataset` 미지원 조직 | 자동으로 dataset ACL 방식으로 폴백됨. 8-4 로 `WRITER` 부여 확인 |
 | 빌드 로그에 `REPO_FULL_NAME: ...L2Comm02` | L2Comm02 트리거를 재사용함 | `trg-l2comm03-python-image` 를 사용. 최신 소스로 `git pull` 후 `30-platform.sh` 재실행 |
 | `triggers create github: unrecognized arguments: <트리거명>` | 트리거 이름을 위치 인자로 전달 | 최신 소스로 `git pull`. `--name=` 플래그를 사용하도록 수정됨 |
+| `Invalid value for field 'filter'` (firewall-rules list) | `allowed.ports` 는 서버측 필터 미지원 | 네트워크로만 필터하고 포트는 `grep 2049` 로 거름 (10-3) |
+| `git pull` 이 local changes 로 중단 | `chmod +x` 로 인한 권한 비트 변경 | `git checkout -- <파일>` 후 재시도. 반복되면 `git config core.fileMode false` |
 | `/ssw/dlk already exists and is not the expected symlink` | L2Comm02 체크아웃을 가리키는 링크가 남음 | `readlink -f /ssw/dlk` 확인 후 `REPOINT=true bash ssw/dlk/install-vm.sh` (실제 디렉터리면 백업 후 재실행) |
 | `create-auto: unrecognized arguments: --workload-pool` | Autopilot 은 해당 플래그 미지원 | 최신 소스로 `git pull`. Autopilot 은 WI 가 기본 활성화이며 pool 은 자동 설정됨 |
 | `enable_master_authorized_networks should be enabled if private endpoint is enabled` | 플래그 조합 누락 | 최신 소스로 `git pull`. `--enable-master-authorized-networks` 가 함께 지정됨 |
