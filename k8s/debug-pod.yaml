@@ -1,0 +1,62 @@
+# L2Comm03 디버그 Pod
+#
+# 배치 Job 은 50초 만에 끝나고 삭제되므로 접속할 수 없습니다.
+# 이 Pod 는 배치와 동일한 환경(이미지 / KSA / NFS 마운트 / 환경변수)으로
+# 떠서 대기하므로 kubectl exec 로 들어가 확인할 수 있습니다.
+#
+# 적용:
+#   kubectl apply -f k8s/debug-pod.yaml
+#   kubectl -n l2comm-batch wait --for=condition=Ready pod/l2comm-debug --timeout=300s
+#   kubectl -n l2comm-batch exec -it l2comm-debug -- bash
+#
+# 정리:
+#   kubectl delete -f k8s/debug-pod.yaml
+#
+# ssw/dlk/debug-gke.sh 를 쓰면 위 과정을 한 번에 수행합니다.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: l2comm-debug
+  namespace: l2comm-batch
+  labels:
+    app: l2comm-debug
+spec:
+  restartPolicy: Never
+  serviceAccountName: ksa-l2comm-batch
+
+  # 방치되어도 과금이 늘지 않도록 2시간 뒤 스스로 종료합니다.
+  activeDeadlineSeconds: 7200
+
+  containers:
+    - name: debug
+      image: asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-python/python-bq-batch:v1
+      imagePullPolicy: IfNotPresent
+      command: ["/bin/bash", "-c", "sleep 7200"]
+
+      env:
+        - name: EXECUTION_PROJECT
+          value: "gcp-prod-edp-edge-509423"
+        - name: TARGET_PROJECT
+          value: "pjt-c-admin"
+        - name: TARGET_DATASET
+          value: "dlk_sample"
+        - name: TARGET_TABLE
+          value: "gcp_region_inventory"
+
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "1Gi"
+        limits:
+          cpu: "500m"
+          memory: "1Gi"
+
+      volumeMounts:
+        - name: git-nfs
+          mountPath: /mnt/l2comm
+          readOnly: true
+
+  volumes:
+    - name: git-nfs
+      persistentVolumeClaim:
+        claimName: l2comm-git-nfs-pvc

@@ -987,6 +987,43 @@ africa-south1   UP      africa-south1   ...
 >
 > `findmnt` 의 SOURCE 가 `.../Gcp_Managed_GKE_L2Comm03/mnt` 여야 합니다.
 
+### 11-2c. Pod 접속해서 확인 (디버그)
+
+배치 Job 은 50초 만에 끝나고 삭제되므로 그 Pod 에는 접속할 수 없습니다.
+같은 환경(이미지 / KSA / NFS 마운트 / 환경변수)으로 대기하는 Pod 를 띄웁니다.
+
+```bash
+cd ~/Gcp_Managed_GKE_L2Comm03
+./ssw/dlk/debug-gke.sh
+```
+
+Pod 생성 → Ready 대기 → 쉘 접속까지 한 번에 수행합니다.
+Autopilot 이 노드를 띄우느라 2~5분 걸릴 수 있습니다.
+
+Pod 안에서 확인할 것들:
+
+```bash
+pwd && ls -l                              # /app, main.py (이미지 내부)
+ls -l /mnt/l2comm/python/                 # NFS 마운트 (Git mnt/)
+head -5 /mnt/l2comm/python/bq_sample.py   # 03 저장소 내용인지
+env | grep TARGET                         # 주입된 환경변수
+python main.py                            # 적재 배치 수동 실행
+python /mnt/l2comm/python/bq_sample.py    # 조회 샘플 수동 실행
+```
+
+빠져나온 뒤 재접속하거나 정리합니다.
+
+```bash
+./ssw/dlk/debug-gke.sh shell    # 재접속
+./ssw/dlk/debug-gke.sh delete   # 정리
+```
+
+> 방치해도 `activeDeadlineSeconds: 7200` 로 2시간 뒤 자동 종료됩니다.
+> 매니페스트는 `k8s/debug-pod.yaml` 이며, `kubectl apply -f` 로 직접 써도 됩니다.
+>
+> `exec` 가 `No agent available` 로 실패하면 konnectivity 미연결입니다.
+> Owner 로 `./gcloud/11-firewall.sh` 를 실행하십시오 (§10-3).
+
 ### 11-3. 다른 터미널에서 관찰
 
 ```bash

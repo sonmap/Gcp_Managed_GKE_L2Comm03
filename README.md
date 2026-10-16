@@ -188,7 +188,8 @@ app/                        # Python batch + Dockerfile
 cloudbuild/cloudbuild.yaml  # Image build 정의
 helm/l2comm-batch/          # Helm chart
 docs/                       # DESIGN.md / MIGRATION.md
-ssw/dlk/                    # VM run-gke.sh / NFS PoC
+k8s/debug-pod.yaml          # 배치와 동일 환경의 디버그 Pod (접속용)
+ssw/dlk/                    # VM run-gke.sh / client_gke / debug-gke.sh / NFS PoC
 mnt/                        # NFS PV 마운트용 Python 샘플
 ```
 
