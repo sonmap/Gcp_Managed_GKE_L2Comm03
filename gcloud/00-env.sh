@@ -11,7 +11,7 @@ export DATA_PROJECT="pjt-c-admin"
 export REGION="asia-northeast3"
 
 # ---- Bootstrap ----
-export ADMIN_USER="chomap@sonmap.net"
+export ADMIN_USER="cho@sonmap.net"
 export VM_SA="620081195575-compute@developer.gserviceaccount.com"
 export TFSTATE_BUCKET="gcp-prod-edp-edge-509423-l2comm-tfstate"   # gcloud 전환 시 선택사항
 

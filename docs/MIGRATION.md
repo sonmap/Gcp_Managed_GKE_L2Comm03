@@ -14,7 +14,7 @@
 | 멱등성 | state 기반 | `describe \|\| create` + `ok_if_exists()` |
 | 불필요해진 자원 | — | `sa-l2comm-inframgr`, `roles/config.agent`, `roles/config.admin`, `config.googleapis.com`, tfstate 버킷 |
 | Build Trigger 감시 경로 | `terraform/30-infra-manager/**` | `gcloud/**` |
-| 배포 주체 | `admin@sonmap.net` → `sa-l2comm-tf-admin` 가장 | `chomap@sonmap.net` 직접 실행 |
+| 배포 주체 | `admin@sonmap.net` → `sa-l2comm-tf-admin` 가장 | `cho@sonmap.net` 직접 실행 |
 | 런타임 SA | `sa-l2comm-cloudbuild` / `sa-l2comm-workflow` / `sa-l2comm-runtime` | `sa-l2comm-gke` 1개로 통합 |
 | 배치 실행 경로 | Scheduler → Workflows → GKE Job | `run-gke.sh` → `client_gke` → GKE Job |
 | 정기 실행 | Cloud Scheduler | VM `crontab` |
@@ -28,7 +28,7 @@ IAM 주체 구성만 아래와 같이 단순화했습니다.
 L2Comm02                          L2Comm03
 ─────────────────────────         ─────────────────────────
 sa-l2comm-tf-admin        ──┐
-                            └──>  chomap@sonmap.net (직접 실행, 동일 Role 집합)
+                            └──>  cho@sonmap.net (직접 실행, 동일 Role 집합)
 
 sa-l2comm-cloudbuild      ──┐
 sa-l2comm-workflow        ──┼──>  sa-l2comm-gke (Role 합집합)

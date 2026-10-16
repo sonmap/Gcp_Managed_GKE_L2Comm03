@@ -53,7 +53,7 @@ vi gcloud/00-env.sh          # 프로젝트 ID / CIDR / SA 값 확인
 L2Comm02                          L2Comm03
 ─────────────────────────         ─────────────────────────
 sa-l2comm-tf-admin        ──┐
-                            └──>  chomap@sonmap.net (직접 실행)
+                            └──>  cho@sonmap.net (직접 실행)
 
 sa-l2comm-cloudbuild      ──┐
 sa-l2comm-workflow        ──┼──>  sa-l2comm-gke
@@ -62,7 +62,7 @@ sa-l2comm-runtime         ──┘
 
 | 주체 | 생성 위치 | 용도 |
 |---|---|---|
-| `chomap@sonmap.net` | — (기존 계정) | 배포 주체. `00-bootstrap.sh` 가 Edge/Host/Data Role 부여 |
+| `cho@sonmap.net` | — (기존 계정) | 배포 주체. `00-bootstrap.sh` 가 Edge/Host/Data Role 부여 |
 | `sa-l2comm-gke` | `30-platform.sh` | Cloud Build / GKE Runtime (Pod Workload Identity) |
 
 `sa-l2comm-gke` 는 Build + Runtime Role 을 갖습니다: `artifactregistry.writer`,
@@ -71,7 +71,7 @@ Dataset `bigquery.dataEditor`.
 
 Workflows 를 쓰지 않으므로 `workflows.invoker` 는 제거했고, Job 생성 권한
 (`container.developer`)은 SA 가 아니라 **run-gke.sh 를 실행하는 주체**
-(`chomap@sonmap.net` 및 VM 기본 SA)에 부여합니다.
+(`cho@sonmap.net` 및 VM 기본 SA)에 부여합니다.
 
 배포 주체에는 이 SA 에 대한 `roles/iam.serviceAccountUser`(actAs)가 필요하며
 `30-platform.sh` 가 자동 부여합니다.
@@ -197,7 +197,7 @@ Edge 프로젝트 권한만으로는 실패합니다.
 
 gcloud 전환으로 아래가 불필요해졌습니다.
 
-- `sa-l2comm-tf-admin` 서비스 계정 (배포 주체가 `chomap@sonmap.net` 직접 실행으로 변경)
+- `sa-l2comm-tf-admin` 서비스 계정 (배포 주체가 `cho@sonmap.net` 직접 실행으로 변경)
 - `sa-l2comm-cloudbuild` / `sa-l2comm-workflow` / `sa-l2comm-runtime` (→ `sa-l2comm-gke` 통합)
 - `sa-l2comm-inframgr` 서비스 계정
 - `roles/config.agent`, `roles/config.admin`

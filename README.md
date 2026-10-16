@@ -10,7 +10,7 @@ Terraform + Infrastructure Manager 에서 **gcloud 스크립트**로 바뀌었�
 | 30 단계 | Infrastructure Manager Deployment | gcloud 직접 실행 |
 | 상태 관리 | GCS tfstate | 없음 (`99-verify.sh` 점검) |
 | 삭제 | `terraform destroy` | `90-teardown.sh` |
-| 배포 주체 | `admin@sonmap.net` → `sa-l2comm-tf-admin` 가장 | `chomap@sonmap.net` 직접 실행 |
+| 배포 주체 | `admin@sonmap.net` → `sa-l2comm-tf-admin` 가장 | `cho@sonmap.net` 직접 실행 |
 | 런타임 SA | cloudbuild / workflow / runtime 3개 | `sa-l2comm-gke` 1개로 통합 |
 
 ---
@@ -82,7 +82,7 @@ DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-p
 | Artifact Registry | `gcp-prod-edp-hub-vpchost` / `ar-l2comm-python` | Python batch image (Host 프로젝트) |
 | Batch 실행 | `ssw/dlk/run-gke.sh` + `client_gke` | Kubernetes Job 생성/대기 (Workflows 미사용) |
 | 통합 SA | `sa-l2comm-gke` | Build / Runtime 전 구간 |
-| 배포 주체 | `chomap@sonmap.net` | gcloud 스크립트 실행 |
+| 배포 주체 | `cho@sonmap.net` | gcloud 스크립트 실행 |
 
 ---
 

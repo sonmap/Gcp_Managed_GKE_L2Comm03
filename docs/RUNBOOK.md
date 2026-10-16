@@ -5,7 +5,7 @@
 다음 단계로 넘어가지 마십시오.
 
 전제:
-- 실행 계정: `chomap@sonmap.net`
+- 실행 계정: `cho@sonmap.net`
 - 0~4단계는 어디서든 가능, **5~7단계는 VPC 내부 VM에서만** 가능 (Private endpoint)
 
 ---
@@ -15,11 +15,11 @@
 ### 0-1. 인증 및 저장소
 
 ```bash
-gcloud auth login chomap@sonmap.net
+gcloud auth login cho@sonmap.net
 gcloud auth list
 ```
 
-기대: `chomap@sonmap.net` 앞에 `*` 표시.
+기대: `cho@sonmap.net` 앞에 `*` 표시.
 
 ```bash
 gcloud config set project gcp-prod-edp-edge-509423
@@ -63,14 +63,14 @@ echo "NODE_SA   : ${AUTOPILOT_NODE_SA}"
 ```bash
 gcloud projects get-iam-policy gcp-prod-edp-edge-509423 \
   --flatten="bindings[].members" \
-  --filter="bindings.members:chomap@sonmap.net" \
+  --filter="bindings.members:cho@sonmap.net" \
   --format="value(bindings.role)"
 ```
 
 ```bash
 gcloud projects get-iam-policy gcp-prod-edp-hub-vpchost \
   --flatten="bindings[].members" \
-  --filter="bindings.members:chomap@sonmap.net" \
+  --filter="bindings.members:cho@sonmap.net" \
   --format="value(bindings.role)"
 ```
 
@@ -223,7 +223,7 @@ gcloud artifacts repositories get-iam-policy ar-l2comm-python \
 roles/artifactregistry.writer : sa-l2comm-gke@gcp-prod-edp-edge-509423...
 roles/artifactregistry.reader : 541022739403-compute@... (Autopilot Node SA)
                                 620081195575-compute@... (VM SA)
-                                user:chomap@sonmap.net
+                                user:cho@sonmap.net
 ```
 
 ### 4-2. 통합 서비스 계정
@@ -263,7 +263,7 @@ gcloud projects get-iam-policy gcp-prod-edp-edge-509423 \
   --format="value(bindings.members)"
 ```
 
-기대: `user:chomap@sonmap.net` 과 VM SA 가 포함.
+기대: `user:cho@sonmap.net` 과 VM SA 가 포함.
 
 ### 4-4. BigQuery Dataset 권한
 

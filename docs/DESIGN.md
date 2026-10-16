@@ -89,8 +89,8 @@ On-Prem
 
 | Principal | Scope | Role / 목적 |
 |---|---|---|
-| `chomap@sonmap.net` | Org/Projects | 배포 주체. gcloud 스크립트를 직접 실행 |
-| ~~`sa-l2comm-tf-admin`~~ | — | **L2Comm03에서 삭제.** Terraform 위임 실행이 없어져 불필요. 동일 Role 집합은 `chomap@sonmap.net` 에 직접 부여 |
+| `cho@sonmap.net` | Org/Projects | 배포 주체. gcloud 스크립트를 직접 실행 |
+| ~~`sa-l2comm-tf-admin`~~ | — | **L2Comm03에서 삭제.** Terraform 위임 실행이 없어져 불필요. 동일 Role 집합은 `cho@sonmap.net` 에 직접 부여 |
 | ~~`sa-l2comm-inframgr`~~ | Edge | **L2Comm03에서 미사용.** Infrastructure Manager 제거로 불필요 (`CREATE_INFRAMGR=true` 시에만 생성) |
 | **`sa-l2comm-gke`** | Edge/Data | **통합 SA.** 기존 `sa-l2comm-cloudbuild` + `sa-l2comm-workflow` + `sa-l2comm-runtime` 을 하나로 합침 |
 | `ksa-l2comm-batch` | GKE Namespace | Workload Identity -> `sa-l2comm-gke` |
@@ -112,7 +112,7 @@ Build + Runtime Role 집합입니다.
 
 Workflows 를 사용하지 않으므로 `roles/workflows.invoker` 는 제거했습니다.
 Job 생성 권한 `roles/container.developer` 는 SA 가 아니라 **run-gke.sh 실행 주체**
-(`chomap@sonmap.net`, VM 기본 SA)에 부여합니다.
+(`cho@sonmap.net`, VM 기본 SA)에 부여합니다.
 
 > **트레이드오프**: Build 주체와 Runtime 주체가 같은 SA 를 쓰게 되므로
 > 최소권한 분리는 약해집니다. 운영 전환 시 권한 분리가 요구되면
