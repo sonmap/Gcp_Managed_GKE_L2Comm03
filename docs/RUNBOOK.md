@@ -198,15 +198,33 @@ gcloud builds repositories list \
 > GKE Autopilot 생성에 15~25분이 걸립니다. 중간에 끊지 마십시오.
 > 마지막에 Namespace/KSA 생성은 VPC 외부라면 `SKIP` 으로 지나갑니다 (정상).
 
-### 4-1. Artifact Registry
+### 4-1. Artifact Registry (Host 프로젝트)
 
 ```bash
 gcloud artifacts repositories list \
-  --project=gcp-prod-edp-edge-509423 --location=asia-northeast3 \
+  --project=gcp-prod-edp-hub-vpchost --location=asia-northeast3 \
   --format="table(name.basename(), format)"
 ```
 
 기대: `ar-l2comm-python`, `ar-l2comm-helm` (둘 다 DOCKER).
+
+저장소 레벨 IAM이 핵심입니다. AR이 Host 프로젝트에 있어 Edge 프로젝트의
+project IAM으로는 닿지 않습니다.
+
+```bash
+gcloud artifacts repositories get-iam-policy ar-l2comm-python \
+  --project=gcp-prod-edp-hub-vpchost --location=asia-northeast3 \
+  --format="yaml(bindings)"
+```
+
+기대:
+
+```text
+roles/artifactregistry.writer : sa-l2comm-gke@gcp-prod-edp-edge-509423...
+roles/artifactregistry.reader : 541022739403-compute@... (Autopilot Node SA)
+                                620081195575-compute@... (VM SA)
+                                user:chomap@sonmap.net
+```
 
 ### 4-2. 통합 서비스 계정
 
@@ -223,10 +241,9 @@ gcloud projects get-iam-policy gcp-prod-edp-edge-509423 \
   --format="value(bindings.role)"
 ```
 
-기대 (6개):
+기대 (Edge 프로젝트에 4개):
 
 ```text
-roles/artifactregistry.writer
 roles/bigquery.jobUser
 roles/compute.viewer
 roles/logging.logWriter
@@ -234,6 +251,8 @@ roles/storage.objectViewer
 ```
 
 > `roles/workflows.invoker`, `roles/container.developer` 가 **없어야** 정상입니다.
+> `roles/artifactregistry.writer` 도 여기에는 없습니다 — AR이 Host 프로젝트에
+> 있으므로 저장소 레벨로 부여되며, 4-1에서 확인합니다.
 
 ### 4-3. Job 생성 주체 권한
 
@@ -339,7 +358,7 @@ gcloud builds log "${BUILD_ID}" \
 
 ```bash
 gcloud artifacts docker images list \
-  asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-python \
+  asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-python \
   --include-tags --format="table(package, tags, createTime)"
 ```
 
@@ -434,7 +453,7 @@ kubectl -n l2comm-batch annotate serviceaccount ksa-l2comm-batch \
 ```bash
 cd ~/Gcp_Managed_GKE_L2Comm03
 
-DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-python/python-bq-batch:v1 \
+DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-python/python-bq-batch:v1 \
 ./ssw/dlk/run-gke.sh \
   20261016 20261016 20261016 180000 \
   0 4 16 \
@@ -463,7 +482,7 @@ mountPath: /mnt/l2comm
 
 ```bash
 DRY_RUN=0 \
-DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-python/python-bq-batch:v1 \
+DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-python/python-bq-batch:v1 \
 ./ssw/dlk/run-gke.sh \
   20261016 20261016 20261016 180000 \
   0 4 16 \
@@ -509,7 +528,7 @@ kubectl -n l2comm-batch logs "${POD}" -f
 
 ```bash
 KEEP_JOB=1 DRY_RUN=0 \
-DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-python/python-bq-batch:v1 \
+DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-python/python-bq-batch:v1 \
 ./ssw/dlk/run-gke.sh \
   20261016 20261016 20261016 180000 \
   0 4 16 \
@@ -557,7 +576,8 @@ cd ~/Gcp_Managed_GKE_L2Comm03
 | `PERMISSION_DENIED` (subnet 생성) | Host 프로젝트 권한 부족 | `compute.networkAdmin`, 조직 `compute.xpnAdmin` 확인 |
 | Cluster 생성 실패 | GKE Service Agent 권한 | `10-network.sh` 재실행 후 `container.hostServiceAgentUser` 확인 |
 | `kubectl` 타임아웃 | VPC 외부에서 실행 | VPC 내부 VM 에서 `--internal-ip` 로 재인증 |
-| Pod `ImagePullBackOff` | Node SA 의 AR 권한 | `AUTOPILOT_NODE_SA` 값과 AR reader 바인딩 확인 |
+| Pod `ImagePullBackOff` | 크로스 프로젝트 AR 권한 | AR이 Host 프로젝트에 있으므로 **저장소 레벨** reader 필요 (4-1). `AUTOPILOT_NODE_SA` 값도 함께 확인 |
+| Build 중 `denied: Permission ... artifactregistry.repositories.uploadArtifacts` | Build SA의 AR writer 누락 | Host 프로젝트 저장소에 `sa-l2comm-gke` writer 바인딩 확인 (4-1) |
 | Pod 에서 BigQuery 403 | Workload Identity 미연결 | KSA 어노테이션과 `workloadIdentityUser` 바인딩 확인 (4-5, 6-4) |
 | PVC `Pending` | NFS 서버 미기동 / IP 불일치 | VM 에서 `showmount -e localhost`, `--nfs-server` 로 IP 명시 |
 | Job 생성 403 | 실행 주체 권한 | `container.developer` 가 실행 계정/VM SA 에 있는지 확인 (4-3) |

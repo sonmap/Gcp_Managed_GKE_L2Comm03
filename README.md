@@ -45,7 +45,7 @@ run-gke.sh (파라미터 10개)
 
 ```bash
 DRY_RUN=0 \
-DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-python/python-bq-batch:v1 \
+DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-python/python-bq-batch:v1 \
 ./ssw/dlk/run-gke.sh \
   20261016 20261016 20261016 180000 \
   0 4 16 \
@@ -74,12 +74,12 @@ DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-p
 
 | 구분 | Project / Resource | 역할 |
 |---|---|---|
-| Shared VPC Host | `gcp-prod-edp-hub-vpchost` | VPC/Subnet 소유 |
-| Edge / Runtime | `gcp-prod-edp-edge-509423` | GKE, Cloud Build, Artifact Registry |
+| Shared VPC Host | `gcp-prod-edp-hub-vpchost` | VPC/Subnet 소유 + **Artifact Registry** |
+| Edge / Runtime | `gcp-prod-edp-edge-509423` | GKE, Cloud Build |
 | Data | `pjt-c-admin` | BigQuery 데이터 저장 |
 | VPC | `vpc-prod-edp-hub` | 기존 172 서비스망과 신규 GKE 대역 공존 |
 | GKE | `gke-l2comm-batch-an3` | Private GKE Autopilot |
-| Artifact Registry | `ar-l2comm-python` | Python batch image |
+| Artifact Registry | `gcp-prod-edp-hub-vpchost` / `ar-l2comm-python` | Python batch image (Host 프로젝트) |
 | Batch 실행 | `ssw/dlk/run-gke.sh` + `client_gke` | Kubernetes Job 생성/대기 (Workflows 미사용) |
 | 통합 SA | `sa-l2comm-gke` | Build / Runtime 전 구간 |
 | 배포 주체 | `chomap@sonmap.net` | gcloud 스크립트 실행 |
@@ -170,7 +170,7 @@ gcloud/**
 Build 성공 시 아래 Image가 생성됩니다.
 
 ```
-asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-python/python-bq-batch:v1
+asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-python/python-bq-batch:v1
 ```
 
 ---
@@ -182,7 +182,7 @@ asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-python/python-
 3. On-Prem 연동 시 `100.64.128.0/19` Return Route 확인
 4. `10.254.5.0/28` Control Plane CIDR 중복 여부 확인
 5. 기존 `github-l2comm` Connection에서 이 Repository 연결
-6. Artifact Registry Image Pull용 Node SA 권한 확인
+6. Artifact Registry가 Host 프로젝트에 있으므로, Node SA / Build SA의 **저장소 레벨** IAM 확인
 7. 실행 주체에 Host 프로젝트 `compute.networkAdmin` 및 Shared VPC 연결용 `compute.xpnAdmin` 보유 여부 확인
 
 ---

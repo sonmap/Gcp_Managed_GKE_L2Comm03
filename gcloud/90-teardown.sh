@@ -12,9 +12,9 @@ confirm "GKE Cluster ${CLUSTER_NAME} 삭제? (수십 분 소요)" && \
 confirm "Cloud Build Trigger ${CB_TRIGGER} 삭제?" && \
   gcloud builds triggers delete "${CB_TRIGGER}" --project="${EDGE_PROJECT}" --region="${REGION}" --quiet
 
-confirm "Artifact Registry ${AR_PYTHON} / ${AR_HELM} 삭제? (이미지 전부 삭제됨)" && {
-  gcloud artifacts repositories delete "${AR_PYTHON}" --project="${EDGE_PROJECT}" --location="${REGION}" --quiet
-  gcloud artifacts repositories delete "${AR_HELM}"   --project="${EDGE_PROJECT}" --location="${REGION}" --quiet
+confirm "Artifact Registry ${AR_PROJECT}/${AR_PYTHON} / ${AR_HELM} 삭제? (이미지 전부 삭제됨)" && {
+  gcloud artifacts repositories delete "${AR_PYTHON}" --project="${AR_PROJECT}" --location="${REGION}" --quiet
+  gcloud artifacts repositories delete "${AR_HELM}"   --project="${AR_PROJECT}" --location="${REGION}" --quiet
 }
 
 confirm "Subnet ${SUBNET_NAME} 삭제? (Cluster 삭제 완료 후에만 가능)" && \

@@ -25,6 +25,9 @@ export CONTROL_PLANE_CIDR="10.254.5.0/28"
 
 # ---- Platform (30) ----
 export CLUSTER_NAME="gke-l2comm-batch-an3"
+# Artifact Registry 는 Host(VPC) 프로젝트에 둡니다.
+# Build(Edge) / Pull(Edge Node) 이 모두 크로스 프로젝트로 동작합니다.
+export AR_PROJECT="${HOST_PROJECT}"
 export AR_PYTHON="ar-l2comm-python"
 export AR_HELM="ar-l2comm-helm"
 export IMAGE_NAME="python-bq-batch"
@@ -54,7 +57,8 @@ export POD_MOUNT_PATH="${POD_MOUNT_PATH:-/mnt/l2comm}"
 # 하나로 합친 것입니다. Build / Workflow / Runtime 전 구간에서 사용합니다.
 export SA_GKE_NAME="sa-l2comm-gke"
 export SA_GKE="${SA_GKE_NAME}@${EDGE_PROJECT}.iam.gserviceaccount.com"
-export IMAGE_URI="${REGION}-docker.pkg.dev/${EDGE_PROJECT}/${AR_PYTHON}/${IMAGE_NAME}:${IMAGE_TAG}"
+export IMAGE_URI="${REGION}-docker.pkg.dev/${AR_PROJECT}/${AR_PYTHON}/${IMAGE_NAME}:${IMAGE_TAG}"
+export HELM_OCI_URI="oci://${REGION}-docker.pkg.dev/${AR_PROJECT}/${AR_HELM}"
 
 EDGE_PROJECT_NUMBER="$(gcloud projects describe "${EDGE_PROJECT}" --format='value(projectNumber)')"
 export EDGE_PROJECT_NUMBER

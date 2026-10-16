@@ -34,6 +34,7 @@ EDGE_APIS=(
 [[ "${CREATE_INFRAMGR}" == "true" ]] && EDGE_APIS+=(config.googleapis.com)
 
 HOST_APIS=(
+  artifactregistry.googleapis.com   # AR 이 Host 프로젝트에 있음
   compute.googleapis.com
   container.googleapis.com
   serviceusage.googleapis.com
@@ -82,7 +83,6 @@ fi
 DEPLOYER_MEMBER="user:${ADMIN_USER}"
 
 bind_project "${EDGE_PROJECT}" "${DEPLOYER_MEMBER}" \
-  roles/artifactregistry.admin \
   roles/cloudbuild.builds.editor \
   roles/compute.viewer \
   roles/container.admin \
@@ -91,7 +91,9 @@ bind_project "${EDGE_PROJECT}" "${DEPLOYER_MEMBER}" \
   roles/resourcemanager.projectIamAdmin \
   roles/serviceusage.serviceUsageAdmin
 
+# artifactregistry.admin 은 AR 이 있는 Host 프로젝트에 부여합니다.
 bind_project "${HOST_PROJECT}" "${DEPLOYER_MEMBER}" \
+  roles/artifactregistry.admin \
   roles/compute.networkAdmin \
   roles/compute.securityAdmin \
   roles/resourcemanager.projectIamAdmin \
@@ -103,7 +105,6 @@ bind_project "${DATA_PROJECT}" "${DEPLOYER_MEMBER}" \
 # VM 에서 스크립트를 실행하는 경우 VM 기본 SA 에도 동일 Role 이 필요합니다.
 if [[ "${GRANT_VM_DEPLOYER:-false}" == "true" ]]; then
   bind_project "${EDGE_PROJECT}" "serviceAccount:${VM_SA}" \
-    roles/artifactregistry.admin \
     roles/cloudbuild.builds.editor \
     roles/compute.viewer \
     roles/container.admin \
@@ -112,6 +113,7 @@ if [[ "${GRANT_VM_DEPLOYER:-false}" == "true" ]]; then
     roles/resourcemanager.projectIamAdmin \
     roles/serviceusage.serviceUsageAdmin
   bind_project "${HOST_PROJECT}" "serviceAccount:${VM_SA}" \
+    roles/artifactregistry.admin \
     roles/compute.networkAdmin \
     roles/compute.securityAdmin
   bind_project "${DATA_PROJECT}" "serviceAccount:${VM_SA}" roles/bigquery.admin

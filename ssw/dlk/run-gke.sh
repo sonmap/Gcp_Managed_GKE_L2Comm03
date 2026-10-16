@@ -26,7 +26,7 @@ Usage:
 
 Example:
   DRY_RUN=0 \
-  DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-python/python-bq-batch:v1 \
+  DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-python/python-bq-batch:v1 \
   /ssw/dlk/run-gke.sh \
     20261008 20261008 20261008 180000 \
     0 4 16 \
@@ -51,7 +51,7 @@ PROGRAM_PARAM=("$@")
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLIENT_GKE="${SCRIPT_DIR}/client_gke"
 
-DOCKER_IMAGE="${DOCKER_IMAGE:-asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-python/python-bq-batch:v1}"
+DOCKER_IMAGE="${DOCKER_IMAGE:-asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-python/python-bq-batch:v1}"
 NAMESPACE="${NAMESPACE:-l2comm-batch}"
 PROGRAM_ID="${PROGRAM_ID:-l2comm-${CURR_YMD}-${CURR_TIME}}"
 

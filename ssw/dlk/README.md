@@ -59,7 +59,7 @@ GKE Autopilot Job → Pod
 
 ```bash
 DRY_RUN=0 \
-DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-python/python-bq-batch:v1 \
+DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-python/python-bq-batch:v1 \
 /ssw/dlk/run-gke.sh \
   20261016 20261016 20261016 180000 \
   0 4 16 \
@@ -131,7 +131,7 @@ sudo ss -lntp | grep 2049
 export KUBECONFIG="$HOME/.kube/config_new-autopilot"
 export DRY_RUN=1
 
-DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-python/python-bq-batch:v1 \
+DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-python/python-bq-batch:v1 \
 /ssw/dlk/run-gke.sh \
   20261008 20261008 20261008 180000 \
   0 4 16 \
@@ -144,7 +144,7 @@ DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-p
 ```bash
 unset DRY_RUN
 
-DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-python/python-bq-batch:v1 \
+DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-python/python-bq-batch:v1 \
 /ssw/dlk/run-gke.sh \
   20261008 20261008 20261008 180000 \
   0 4 16 \

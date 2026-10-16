@@ -9,12 +9,19 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 ###############################################################################
 # 1) Artifact Registry  (google_artifact_registry_repository)
+#
+#    AR 은 Host(VPC) 프로젝트에 생성합니다: ${AR_PROJECT}
+#    Build 주체(Edge 의 sa-l2comm-gke)와 Pull 주체(Edge 의 Autopilot Node SA)가
+#    모두 다른 프로젝트에 있으므로 IAM 은 저장소 레벨로 부여합니다(3단계).
 ###############################################################################
+log "Artifact Registry API 활성화: ${AR_PROJECT}"
+gcloud services enable artifactregistry.googleapis.com --project="${AR_PROJECT}"
+
 for REPO_PAIR in "${AR_PYTHON}:L2Comm Python batch images" "${AR_HELM}:L2Comm offline OCI Helm charts"; do
   REPO="${REPO_PAIR%%:*}"; DESC="${REPO_PAIR#*:}"
-  log "Artifact Registry: ${REPO}"
+  log "Artifact Registry: ${AR_PROJECT}/${REPO}"
   ok_if_exists gcloud artifacts repositories create "${REPO}" \
-    --project="${EDGE_PROJECT}" \
+    --project="${AR_PROJECT}" \
     --location="${REGION}" \
     --repository-format=docker \
     --description="${DESC}"
@@ -38,7 +45,6 @@ ok_if_exists gcloud iam service-accounts create "${SA_GKE_NAME}" \
 bind_project "${EDGE_PROJECT}" "serviceAccount:${SA_GKE}" \
   roles/bigquery.jobUser \
   roles/compute.viewer \
-  roles/artifactregistry.writer \
   roles/logging.logWriter \
   roles/storage.objectViewer
 
@@ -62,13 +68,30 @@ bq --project_id="${DATA_PROJECT}" add-iam-policy-binding \
   "${DATA_PROJECT}:${TARGET_DATASET}"
 
 # Artifact Registry 저장소 레벨 IAM  (google_artifact_registry_repository_iam_member)
-for MEMBER in "${VM_SA}" "${AUTOPILOT_NODE_SA}"; do
-  log "AR IAM :: ${MEMBER} -> roles/artifactregistry.reader"
-  gcloud artifacts repositories add-iam-policy-binding "${AR_PYTHON}" \
-    --project="${EDGE_PROJECT}" --location="${REGION}" \
-    --member="serviceAccount:${MEMBER}" \
-    --role=roles/artifactregistry.reader --quiet >/dev/null
+#
+# AR 이 Host 프로젝트에 있으므로 Edge 프로젝트의 project IAM 으로는 닿지 않습니다.
+# 반드시 저장소(repository) 레벨로 부여해야 합니다.
+#
+#   writer : sa-l2comm-gke       (Cloud Build 가 Image Push)
+#   reader : Autopilot Node SA   (Pod Image Pull)
+#            VM SA               (VM 에서 docker/crane 조회)
+#            배포 주체           (gcloud artifacts ... 확인용)
+ar_bind() {  # ar_bind <repo> <member> <role>
+  log "AR IAM :: ${AR_PROJECT}/${1} :: ${2} -> ${3}"
+  gcloud artifacts repositories add-iam-policy-binding "${1}" \
+    --project="${AR_PROJECT}" --location="${REGION}" \
+    --member="${2}" --role="${3}" --quiet >/dev/null
+}
+
+for REPO in "${AR_PYTHON}" "${AR_HELM}"; do
+  ar_bind "${REPO}" "serviceAccount:${SA_GKE}" roles/artifactregistry.writer
 done
+
+for MEMBER in "${AUTOPILOT_NODE_SA}" "${VM_SA}"; do
+  ar_bind "${AR_PYTHON}" "serviceAccount:${MEMBER}" roles/artifactregistry.reader
+done
+
+ar_bind "${AR_PYTHON}" "user:${ADMIN_USER}" roles/artifactregistry.reader
 
 ###############################################################################
 # 4) Cloud Build Trigger  (google_cloudbuild_trigger)
@@ -155,7 +178,8 @@ cat <<EOF
 === Outputs ===
 cluster_name             : ${CLUSTER_NAME}
 artifact_image           : ${IMAGE_URI}
-helm_oci_repository      : oci://${REGION}-docker.pkg.dev/${EDGE_PROJECT}/${AR_HELM}
+artifact_registry        : ${AR_PROJECT} (Host 프로젝트)
+helm_oci_repository      : ${HELM_OCI_URI}
 cloudbuild_trigger_name  : ${CB_TRIGGER}
 namespace                : ${NAMESPACE}
 ksa                      : ${KSA_NAME}

@@ -9,7 +9,8 @@ Organization / Existing Environment
 |   +-- VPC: vpc-prod-edp-hub
 |   +-- Existing Service Networks: 172.x / 10.x
 |   +-- GKE Node Subnet: 10.252.1.0/24
-|       +-- Pod Secondary: 100.64.128.0/19
+|   |   +-- Pod Secondary: 100.64.128.0/19
+|   +-- Artifact Registry: ar-l2comm-python / ar-l2comm-helm
 |
 +-- Edge Project: gcp-prod-edp-edge-509423
 |   +-- GKE Autopilot: gke-l2comm-batch-an3
@@ -17,7 +18,6 @@ Organization / Existing Environment
 |   |   +-- Service: GKE Managed / 별도 CIDR 미설정
 |   |   +-- Namespace: l2comm-batch
 |   |   +-- KSA: ksa-l2comm-batch
-|   +-- Artifact Registry: ar-l2comm-python
 |   +-- Cloud Build Trigger: trg-l2comm-python-image
 |
 +-- Batch 실행 (VPC 내부 VM)

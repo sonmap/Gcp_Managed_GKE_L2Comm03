@@ -1,5 +1,5 @@
 substitutions:
-  _IMAGE_URI: asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-python/python-bq-batch:v1
+  _IMAGE_URI: asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-python/python-bq-batch:v1
 
 steps:
   - name: gcr.io/cloud-builders/docker

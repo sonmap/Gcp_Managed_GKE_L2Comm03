@@ -4,6 +4,6 @@ serviceAccount:
   gcpServiceAccount: sa-l2comm-gke@gcp-prod-edp-edge-509423.iam.gserviceaccount.com
 
 image:
-  repository: asia-northeast3-docker.pkg.dev/gcp-prod-edp-edge-509423/ar-l2comm-python/python-bq-batch
+  repository: asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-python/python-bq-batch
   tag: v1
   pullPolicy: IfNotPresent
