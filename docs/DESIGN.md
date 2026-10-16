@@ -18,7 +18,7 @@ Organization / Existing Environment
 |   |   +-- Service: GKE Managed / 별도 CIDR 미설정
 |   |   +-- Namespace: l2comm-batch
 |   |   +-- KSA: ksa-l2comm-batch
-|   +-- Cloud Build Trigger: trg-l2comm-python-image
+|   +-- Cloud Build Trigger: trg-l2comm03-python-image
 |
 +-- Batch 실행 (VPC 내부 VM)
 |   +-- ssw/dlk/run-gke.sh   (파라미터 10개)

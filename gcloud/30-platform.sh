@@ -155,15 +155,39 @@ ar_bind "${AR_PYTHON}" "user:${ADMIN_USER}" roles/artifactregistry.reader
 #    2nd-gen repository 참조이므로 `--repository` 플래그를 사용합니다.
 ###############################################################################
 log "Cloud Build Trigger: ${CB_TRIGGER}"
+WANT_REPO="projects/${EDGE_PROJECT}/locations/${REGION}/connections/${CB_CONNECTION}/repositories/${CB_REPO}"
+
 if gcloud builds triggers describe "${CB_TRIGGER}" \
      --project="${EDGE_PROJECT}" --region="${REGION}" >/dev/null 2>&1; then
-  log "SKIP (이미 존재): ${CB_TRIGGER} — 변경이 필요하면 'gcloud builds triggers update' 사용"
+
+  # 이미 존재하는 트리거가 '다른 저장소'를 가리키면 잘못된 소스로 빌드됩니다.
+  # (예: L2Comm02 트리거를 재사용하면 REPO_FULL_NAME 이 ...L2Comm02 로 찍힘)
+  CUR_REPO="$(gcloud builds triggers describe "${CB_TRIGGER}" \
+    --project="${EDGE_PROJECT}" --region="${REGION}" \
+    --format='value(repositoryEventConfig.repository)' 2>/dev/null)"
+
+  if [[ "${CUR_REPO}" == "${WANT_REPO}" ]]; then
+    log "SKIP (이미 존재, 저장소 일치): ${CB_TRIGGER}"
+  else
+    echo "ERROR: 트리거 '${CB_TRIGGER}' 가 다른 저장소를 가리키고 있습니다." >&2
+    echo "       기대: ${WANT_REPO}" >&2
+    echo "       실제: ${CUR_REPO:-<없음>}" >&2
+    echo "" >&2
+    echo "  조치 1) 이 트리거를 03 저장소로 변경" >&2
+    echo "    gcloud builds triggers update github ${CB_TRIGGER} \\" >&2
+    echo "      --project=${EDGE_PROJECT} --region=${REGION} \\" >&2
+    echo "      --repository=${WANT_REPO} \\" >&2
+    echo "      --branch-pattern='^main\$'" >&2
+    echo "" >&2
+    echo "  조치 2) 00-env.sh 의 CB_TRIGGER 를 다른 이름으로 바꾸고 재실행" >&2
+    exit 1
+  fi
 else
   gcloud builds triggers create github "${CB_TRIGGER}" \
     --project="${EDGE_PROJECT}" \
     --region="${REGION}" \
     --description="Auto-build L2Comm Python image on source updates" \
-    --repository="projects/${EDGE_PROJECT}/locations/${REGION}/connections/${CB_CONNECTION}/repositories/${CB_REPO}" \
+    --repository="${WANT_REPO}" \
     --branch-pattern='^main$' \
     --build-config="cloudbuild/cloudbuild.yaml" \
     --service-account="projects/${EDGE_PROJECT}/serviceAccounts/${SA_GKE}" \

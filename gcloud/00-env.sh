@@ -49,7 +49,9 @@ export AUTOPILOT_NODE_SA="541022739403-compute@developer.gserviceaccount.com"
 export CB_CONNECTION="github-l2comm"
 export CB_REPO="Gcp_Managed_GKE_L2Comm03"
 export CB_REMOTE_URI="https://github.com/sonmap/Gcp_Managed_GKE_L2Comm03.git"
-export CB_TRIGGER="trg-l2comm-python-image"
+# L2Comm02 의 트리거(trg-l2comm-python-image)는 L2Comm02 저장소를 가리키므로
+# 재사용하지 않고 03 전용 트리거를 별도로 둡니다. 두 트리거는 공존 가능합니다.
+export CB_TRIGGER="trg-l2comm03-python-image"
 
 # ---- BigQuery ----
 export TARGET_DATASET="dlk_sample"

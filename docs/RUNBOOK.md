@@ -603,13 +603,25 @@ workloadPool: gcp-prod-edp-edge-509423.svc.id.goog
 ### 8-7. Cloud Build Trigger
 
 ```bash
-gcloud builds triggers describe trg-l2comm-python-image \
+gcloud builds triggers describe trg-l2comm03-python-image \
   --project=gcp-prod-edp-edge-509423 --region=asia-northeast3 \
   --format="yaml(name, filename, serviceAccount, includedFiles,
                  repositoryEventConfig.push.branch)"
 ```
 
-기대: `includedFiles` 에 `gcloud/**` 포함, `serviceAccount` 가 `sa-l2comm-gke`.
+기대:
+
+```text
+includedFiles: app/**, cloudbuild/**, gcloud/**
+serviceAccount: ...sa-l2comm-gke@...
+repository: .../repositories/Gcp_Managed_GKE_L2Comm03
+```
+
+> **저장소 경로를 반드시 확인하십시오.** L2Comm02 의 트리거
+> `trg-l2comm-python-image` 를 재사용하면 L2Comm02 소스로 빌드되어
+> 빌드 로그에 `REPO_FULL_NAME: sonmap/Gcp_Managed_GKE_L2Comm02` 가 찍힙니다.
+> L2Comm03 은 `trg-l2comm03-python-image` 를 따로 사용하며, 스크립트가
+> 기존 트리거의 저장소 불일치를 감지하면 중단합니다.
 
 ---
 
@@ -618,7 +630,7 @@ gcloud builds triggers describe trg-l2comm-python-image \
 ### 9-1. 수동 빌드 실행
 
 ```bash
-gcloud builds triggers run trg-l2comm-python-image \
+gcloud builds triggers run trg-l2comm03-python-image \
   --project=gcp-prod-edp-edge-509423 --region=asia-northeast3 \
   --branch=main
 ```
@@ -960,6 +972,7 @@ crontab -l
 | `cloudbuild.connections.list denied` | 배포 주체에 `cloudbuild.connectionAdmin` 없음 | §6-2 로 점검 후 Owner 로 `00-bootstrap.sh` 재실행 |
 | 저장소 추가 시 `NOT_FOUND` / `PERMISSION_DENIED` | GitHub App 이 L2Comm03 에 접근 불가 | §7-2 에서 GitHub App Repository access 에 L2Comm03 추가 |
 | `BigQuery error ... This feature requires allowlisting` | `bq add-iam-policy-binding --dataset` 미지원 조직 | 자동으로 dataset ACL 방식으로 폴백됨. 8-4 로 `WRITER` 부여 확인 |
+| 빌드 로그에 `REPO_FULL_NAME: ...L2Comm02` | L2Comm02 트리거를 재사용함 | `trg-l2comm03-python-image` 를 사용. 최신 소스로 `git pull` 후 `30-platform.sh` 재실행 |
 | `create-auto: unrecognized arguments: --workload-pool` | Autopilot 은 해당 플래그 미지원 | 최신 소스로 `git pull`. Autopilot 은 WI 가 기본 활성화이며 pool 은 자동 설정됨 |
 | `enable_master_authorized_networks should be enabled if private endpoint is enabled` | 플래그 조합 누락 | 최신 소스로 `git pull`. `--enable-master-authorized-networks` 가 함께 지정됨 |
 | 생성 중 Cloud NAT 안내 메시지 | Private nodes 안내(오류 아님) | AR 은 Private Google Access 로 접근하므로 무시 가능. 공인 인터넷 egress 가 필요하면 Cloud NAT 구성 |
