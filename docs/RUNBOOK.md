@@ -776,6 +776,67 @@ gcloud compute instances add-tags <VM_NAME> \
   --tags=l2comm-nfs
 ```
 
+### 10-3b. 방화벽 (Control Plane → Node) — **Owner 계정**
+
+Private cluster 에서 `kubectl logs` / `exec` 는 konnectivity 를 통해
+컨트롤 플레인이 노드에 접속합니다. Shared VPC 환경에서는 이 규칙이
+Host 프로젝트에 자동 생성되지 않는 경우가 있고, 그러면 다음이 발생합니다.
+
+```text
+Error from server: Get "https://10.252.1.x:10250/containerLogs/...": No agent available
+```
+
+> Job 실행 자체는 영향을 받지 않습니다. 로그와 exec 만 막힙니다.
+
+확인:
+
+```bash
+gcloud compute firewall-rules list \
+  --project=gcp-prod-edp-hub-vpchost \
+  --filter="network:vpc-prod-edp-hub" \
+  --format="table(name, sourceRanges.list(), allowed[].map().firewall_rule().list(), targetTags.list())" \
+  | grep -E "NAME|10.254.5"
+```
+
+Control Plane CIDR `10.254.5.0/28` 에서 오는 규칙이 없으면 생성합니다.
+먼저 노드 네트워크 태그를 확인합니다.
+
+```bash
+NODE_TAG=$(gcloud compute firewall-rules list \
+  --project=gcp-prod-edp-hub-vpchost \
+  --filter="name~gke-gke-l2comm-batch-an3" \
+  --format="value(targetTags.list())" | head -1)
+echo "NODE_TAG=${NODE_TAG}"
+```
+
+기대: `gke-gke-l2comm-batch-an3-<hash>-node`
+
+Owner 계정으로 생성합니다.
+
+```bash
+gcloud config set account admin@sonmap.net
+
+gcloud compute firewall-rules create gke-l2comm-batch-an3-master \
+  --project=gcp-prod-edp-hub-vpchost \
+  --network=vpc-prod-edp-hub \
+  --direction=INGRESS --action=ALLOW \
+  --rules=tcp:10250,tcp:443,tcp:8443,tcp:9443,tcp:15017 \
+  --source-ranges=10.254.5.0/28 \
+  --target-tags="${NODE_TAG}" \
+  --description="GKE control plane -> l2comm nodes (konnectivity, webhooks)"
+
+gcloud config set account cho@sonmap.net
+```
+
+확인:
+
+```bash
+export KUBECONFIG=$HOME/.kube/config_new-autopilot
+kubectl -n kube-system get pods -l k8s-app=konnectivity-agent
+```
+
+기대: `Running`. 이후 `kubectl logs` 가 정상 동작합니다.
+
 ### 10-4. 클러스터 자격증명
 
 `client_gke` 는 기본적으로 `$HOME/.kube/config_new-autopilot` 를 봅니다.
@@ -835,6 +896,23 @@ kubectl -n l2comm-batch run wi-test --rm -it --restart=Never \
 
 ## 11. 배치 실행
 
+### 11-0. 두 가지 실행 대상 (중요)
+
+`run-gke.sh` 의 8~10번 파라미터(`WORKING_DIRECTORY` / `PROGRAM_PATH` /
+`PROGRAM_PARAM`)가 **Pod 안에서 무엇을 실행할지**를 결정합니다.
+두 가지 대상이 있으며 용도가 다릅니다.
+
+| 대상 | 경로 | 소스 위치 | 동작 |
+|---|---|---|---|
+| **적재 배치** | `/app` + `main.py` | 컨테이너 이미지 내부 | GCP 리전 43건을 BigQuery 에 **적재** |
+| NFS 조회 샘플 | `/mnt/l2comm/python` + `bq_sample.py` | VM NFS (Git `mnt/`) | 적재된 테이블을 10건 **조회**만 함 |
+
+- **PoC 검증 기준(`row_count = 43`)을 만드는 것은 적재 배치입니다.**
+- NFS 샘플은 "Git 으로 관리하는 스크립트를 NFS 로 Pod 에 전달한다"는
+  경로를 검증하기 위한 것이며, 테이블에 행을 추가하지 않습니다.
+- 이미지의 `WORKDIR` 는 `/app`, 엔트리포인트 스크립트는 `main.py` 입니다
+  (`app/Dockerfile` 참고).
+
 ### 11-1. DRY_RUN — 매니페스트만 확인
 
 ```bash
@@ -871,7 +949,9 @@ mountPath: /mnt/l2comm
 
 기대: Usage 출력, exit 1.
 
-### 11-2. 실제 실행
+### 11-2. 적재 배치 실행 (PoC 검증 기준)
+
+이미지 내부의 `main.py` 를 실행해 BigQuery 에 43건을 적재합니다.
 
 ```bash
 DRY_RUN=0 \
@@ -879,8 +959,8 @@ DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-p
 ./ssw/dlk/run-gke.sh \
   20261016 20261016 20261016 180000 \
   0 4 16 \
-  /mnt/l2comm/python \
-  python bq_sample.py
+  /app \
+  python main.py
 ```
 
 기대 흐름:
@@ -897,6 +977,42 @@ Completed: pjt-c-admin.dlk_sample.gcp_region_inventory, rows=43
 ```
 
 > 첫 실행은 Autopilot 이 Node 를 새로 띄우므로 2~5분 걸릴 수 있습니다.
+
+### 11-2b. NFS 경로 검증 (조회 샘플)
+
+Git `mnt/` 의 스크립트가 NFS 를 통해 Pod 에 전달되는지 확인합니다.
+**테이블에 행을 추가하지 않습니다.** 11-2 를 먼저 수행해야 조회할 데이터가 있습니다.
+
+```bash
+DRY_RUN=0 \
+DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-python/python-bq-batch:v1 \
+./ssw/dlk/run-gke.sh \
+  20261016 20261016 20261016 180000 \
+  0 4 16 \
+  /mnt/l2comm/python \
+  python bq_sample.py
+```
+
+기대 로그:
+
+```text
+[INFO] BigQuery job project : gcp-prod-edp-edge-509423
+[INFO] Sample table         : pjt-c-admin.dlk_sample.gcp_region_inventory
+[INFO] Limit                : 10
+[INFO] rows=10
+africa-south1   UP      africa-south1   ...
+```
+
+> 로그가 **비어 있으면** NFS 가 올바른 저장소를 export 하고 있는지
+> 확인하십시오. `/ssw/dlk` 재지정 후 `setup-nfs-server.sh` 를 다시
+> 돌리지 않으면 이전(L2Comm02) `mnt/` 가 계속 export 됩니다.
+>
+> ```bash
+> findmnt /srv/l2comm-nfs
+> ls -l /srv/l2comm-nfs/python/
+> ```
+>
+> `findmnt` 의 SOURCE 가 `.../Gcp_Managed_GKE_L2Comm03/mnt` 여야 합니다.
 
 ### 11-3. 다른 터미널에서 관찰
 
@@ -1008,7 +1124,9 @@ crontab -l
 | `BigQuery error ... This feature requires allowlisting` | `bq add-iam-policy-binding --dataset` 미지원 조직 | 자동으로 dataset ACL 방식으로 폴백됨. 8-4 로 `WRITER` 부여 확인 |
 | 빌드 로그에 `REPO_FULL_NAME: ...L2Comm02` | L2Comm02 트리거를 재사용함 | `trg-l2comm03-python-image` 를 사용. 최신 소스로 `git pull` 후 `30-platform.sh` 재실행 |
 | `triggers create github: unrecognized arguments: <트리거명>` | 트리거 이름을 위치 인자로 전달 | 최신 소스로 `git pull`. `--name=` 플래그를 사용하도록 수정됨 |
-| `kubectl logs` 가 `No agent available` | Private cluster 의 konnectivity 미연결 (마스터→노드 방화벽) | Job 자체는 정상. `client_gke` 가 Cloud Logging 으로 자동 폴백함. 근본 해결은 마스터 CIDR(10.254.5.0/28)→노드 tcp:10250 허용 규칙 확인 |
+| `kubectl logs` 가 `No agent available` | Private cluster 의 konnectivity 미연결 (마스터→노드 방화벽 누락) | Job 자체는 정상. `client_gke` 가 Cloud Logging 으로 자동 폴백함. 근본 해결은 §10-3b 로 마스터 규칙 생성 |
+| NFS 샘플 실행 로그가 비어 있음 | 이전 저장소(L2Comm02)의 `mnt/` 가 export 중 | `findmnt /srv/l2comm-nfs` 확인 후 `sudo bash /ssw/dlk/setup-nfs-server.sh` 재실행 |
+| 적재했는데 `row_count` 가 늘지 않음 | 조회 샘플(`bq_sample.py`)만 실행함 | 적재는 `/app` + `main.py` (11-2). NFS 샘플은 조회 전용 |
 | `Invalid value for field 'filter'` (firewall-rules list) | `allowed.ports` 는 서버측 필터 미지원 | 네트워크로만 필터하고 포트는 `grep 2049` 로 거름 (10-3) |
 | `git pull` 이 local changes 로 중단 | `chmod +x` 로 인한 권한 비트 변경 | `git checkout -- <파일>` 후 재시도. 반복되면 `git config core.fileMode false` |
 | `/ssw/dlk already exists and is not the expected symlink` | L2Comm02 체크아웃을 가리키는 링크가 남음 | `readlink -f /ssw/dlk` 확인 후 `REPOINT=true bash ssw/dlk/install-vm.sh` (실제 디렉터리면 백업 후 재실행) |

@@ -301,8 +301,13 @@ ksa                      : ${KSA_NAME}
 service_account          : ${SA_GKE}   (Build / Runtime 통합)
 
 === 배치 실행 (Workflow/Scheduler 미사용) ===
-VPC 내부 VM 에서:
-  DOCKER_IMAGE=${IMAGE_URI} \\
+VPC 내부 VM 에서 (적재 배치 - 이미지 내 /app/main.py):
+  DRY_RUN=0 DOCKER_IMAGE=${IMAGE_URI} \\
+  ./ssw/dlk/run-gke.sh 20261016 20261016 20261016 180000 0 4 16 \\
+    /app python main.py
+
+NFS 경로 검증 (조회 샘플 - Git mnt/ 의 bq_sample.py):
+  DRY_RUN=0 DOCKER_IMAGE=${IMAGE_URI} \\
   ./ssw/dlk/run-gke.sh 20261016 20261016 20261016 180000 0 4 16 \\
     /mnt/l2comm/python python bq_sample.py
 EOF

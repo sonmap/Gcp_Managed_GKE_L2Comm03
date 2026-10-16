@@ -49,9 +49,16 @@ DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-p
 ./ssw/dlk/run-gke.sh \
   20261016 20261016 20261016 180000 \
   0 4 16 \
-  /mnt/l2comm/python \
-  python bq_sample.py
+  /app \
+  python main.py
 ```
+
+8~10번 파라미터가 Pod 안에서 실행할 대상을 결정합니다.
+
+| 대상 | 8번 | 9·10번 | 동작 |
+|---|---|---|---|
+| 적재 배치 | `/app` | `python main.py` | 이미지 내부 스크립트로 BigQuery 43건 적재 |
+| NFS 조회 샘플 | `/mnt/l2comm/python` | `python bq_sample.py` | Git `mnt/` 스크립트를 NFS 로 전달해 10건 조회 |
 
 | # | 파라미터 | 예시 |
 |---|---|---|
@@ -62,9 +69,9 @@ DOCKER_IMAGE=asia-northeast3-docker.pkg.dev/gcp-prod-edp-hub-vpchost/ar-l2comm-p
 | 5 | `VM_GPU` | `0` |
 | 6 | `VM_CPU` | `4` |
 | 7 | `VM_MEM` (GiB) | `16` |
-| 8 | `WORKING_DIRECTORY` | `/mnt/l2comm/python` |
+| 8 | `WORKING_DIRECTORY` | `/app` |
 | 9 | `PROGRAM_PATH` | `python` |
-| 10 | `PROGRAM_PARAM` | `bq_sample.py` |
+| 10 | `PROGRAM_PARAM` | `main.py` |
 
 정기 실행이 필요하면 VM의 `crontab`에서 `run-gke.sh`를 호출합니다.
 
